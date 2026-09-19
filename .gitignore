@@ -11,6 +11,7 @@ out/
 # Build
 dist/
 build/
+apps/api/prisma/generated/
 
 # Environment
 .env

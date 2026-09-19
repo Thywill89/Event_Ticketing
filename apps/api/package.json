@@ -4,13 +4,19 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "build": "node ./scripts/link-prisma-client.cjs && prisma generate && tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"No lint configured for @event-ticketing/api\""
+    "lint": "echo \"No lint configured for @event-ticketing/api\"",
+    "db:generate": "node ./scripts/link-prisma-client.cjs && prisma generate",
+    "db:migrate": "node ./scripts/link-prisma-client.cjs && prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:push": "node ./scripts/link-prisma-client.cjs && prisma db push",
+    "postinstall": "node ./scripts/link-prisma-client.cjs && prisma generate"
   },
   "dependencies": {
     "@event-ticketing/shared": "*",
+    "@prisma/client": "^6.19.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0"
@@ -19,6 +25,7 @@
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@types/node": "^22.15.21",
+    "prisma": "^6.19.3",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
