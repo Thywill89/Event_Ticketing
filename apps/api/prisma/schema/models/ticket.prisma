@@ -1,0 +1,34 @@
+/// Individual admission credential. ORDER ≠ TICKET (plan §3.3).
+model Ticket {
+  id           String       @id @default(cuid())
+  eventId      String
+  orderId      String
+  orderItemId  String
+  ticketTypeId String
+  status       TicketStatus @default(CREATED)
+
+  /// Human-readable backup lookup (plan §9.5) — e.g. EVT-8F4K7P
+  ticketNumber String @unique
+  /// Secure QR verification token — separate from ticketNumber (plan §9.6 / §14.4)
+  qrToken      String @unique
+
+  attendeeName  String?
+  attendeeEmail String?
+  attendeePhone String?
+
+  issuedAt    DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  checkIn    CheckIn?
+
+  @@index([eventId])
+  @@index([orderId])
+  @@index([status])
+  @@index([ticketTypeId])
+}

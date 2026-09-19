@@ -1,0 +1,18 @@
+model Notification {
+  id        String              @id @default(cuid())
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  recipient String
+  subject   String?
+  body      String?
+  /// Loose link to domain entity (orderId, ticketId, etc.)
+  entityType String?
+  entityId   String?
+  error      String?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([status])
+  @@index([entityType, entityId])
+}

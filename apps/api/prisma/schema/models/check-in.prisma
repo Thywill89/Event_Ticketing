@@ -1,0 +1,15 @@
+model CheckIn {
+  id          String   @id @default(cuid())
+  ticketId    String   @unique
+  eventId     String
+  checkedInBy String?
+  deviceLabel String?
+  checkedInAt DateTime @default(now())
+
+  ticket  Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  staff   User?  @relation("CheckedInBy", fields: [checkedInBy], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([checkedInAt])
+}

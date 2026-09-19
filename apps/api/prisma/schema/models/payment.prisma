@@ -1,0 +1,20 @@
+model Payment {
+  id       String        @id @default(cuid())
+  orderId  String        @unique
+  status   PaymentStatus @default(PENDING)
+  provider String?
+  /// External provider reference (e.g. Paystack reference)
+  providerRef String?
+  amount   Decimal       @db.Decimal(12, 2)
+  currency String        @default("GHS") @db.Char(3)
+  /// Raw verification / webhook payload for reconciliation
+  rawPayload Json?
+  paidAt   DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([providerRef])
+}

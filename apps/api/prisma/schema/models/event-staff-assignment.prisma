@@ -1,0 +1,12 @@
+/// Restricts check-in staff to assigned events (plan §4.3 / §14.2)
+model EventStaffAssignment {
+  id      String @id @default(cuid())
+  staffId String
+  eventId String
+
+  staff OrganizerStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  event Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, eventId])
+  @@index([eventId])
+}

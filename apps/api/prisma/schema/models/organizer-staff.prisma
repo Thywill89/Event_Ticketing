@@ -1,0 +1,16 @@
+/// Staff who work under an organizer (including check-in personnel)
+model OrganizerStaff {
+  id          String   @id @default(cuid())
+  organizerId String
+  userId      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events    EventStaffAssignment[]
+
+  @@unique([organizerId, userId])
+  @@index([userId])
+}

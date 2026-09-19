@@ -1,0 +1,71 @@
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  PLATFORM_ADMIN
+  ORGANIZER
+  CHECK_IN_STAFF
+}
+
+enum OrganizerStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+/// Event publishing / sales lifecycle (plan §6.4)
+enum EventStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  SALES_OPEN
+  SALES_PAUSED
+  SALES_CLOSED
+  LIVE
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+/// Ticket lifecycle (plan §8.4)
+enum TicketStatus {
+  CREATED
+  RESERVED
+  PAID
+  ISSUED
+  CHECKED_IN
+  CANCELLED
+  REFUNDED
+  VOID
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  RESERVED
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}

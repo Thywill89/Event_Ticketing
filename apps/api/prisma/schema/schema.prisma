@@ -1,0 +1,21 @@
+// Event Ticketing — core domain schema (architecture plan §12)
+// Relationships:
+//   User 1—0..1 Organizer
+//   Organizer 1—* Event, OrganizerStaff
+//   Event 1—0..1 Venue, 1—* TicketType, Order, Ticket, CheckIn
+//   Order 1—* OrderItem, Ticket; 1—0..1 Payment
+//   Ticket 1—0..1 CheckIn
+// Customers have no User account; purchaser fields live on Order.
+//
+// Models and enums live in ./models/*.prisma (multi-file schema).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}

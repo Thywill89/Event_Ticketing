@@ -1,0 +1,19 @@
+// Auth / accounts (organizers, staff, admins — not customers)
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  fullName        String
+  role            UserRole
+  emailVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organizer        Organizer?
+  staffMemberships OrganizerStaff[]
+  checkIns         CheckIn[]        @relation("CheckedInBy")
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+}

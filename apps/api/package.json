@@ -12,21 +12,34 @@
     "db:migrate": "node ./scripts/link-prisma-client.cjs && prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "node ./scripts/link-prisma-client.cjs && prisma db push",
+    "db:seed-admin": "tsx scripts/seed-admin.ts",
+    "db:seed-organizer": "tsx scripts/seed-organizer.ts",
+    "db:seed-check-in-staff": "tsx scripts/seed-check-in-staff.ts",
     "postinstall": "node ./scripts/link-prisma-client.cjs && prisma generate"
   },
   "dependencies": {
     "@event-ticketing/shared": "*",
     "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.21",
     "prisma": "^6.19.3",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "schema": "prisma/schema"
   }
 }

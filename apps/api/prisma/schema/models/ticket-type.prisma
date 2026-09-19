@@ -1,0 +1,26 @@
+model TicketType {
+  id          String  @id @default(cuid())
+  eventId     String
+  name        String
+  description String?
+  /// Unit price in major currency units (e.g. GHS). Snapshot later stored on OrderItem.
+  price       Decimal @db.Decimal(12, 2)
+  currency    String  @default("GHS") @db.Char(3)
+
+  quantityTotal    Int
+  quantityReserved Int @default(0)
+  quantitySold     Int @default(0)
+
+  salesStartsAt DateTime?
+  salesEndsAt   DateTime?
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  tickets    Ticket[]
+
+  @@index([eventId])
+}

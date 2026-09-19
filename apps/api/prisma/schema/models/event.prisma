@@ -1,0 +1,37 @@
+model Event {
+  id          String      @id @default(cuid())
+  organizerId String
+  venueId     String?
+  name        String
+  slug        String      @unique
+  category    String?
+  description String?
+  mainImageUrl String?
+  status      EventStatus @default(DRAFT)
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  dressCode      String?
+  ageRestriction String?
+  rules          String?
+  notices        String?
+  contactDetails String?
+  socialLinks    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizer    Organizer              @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  venue        Venue?                 @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  galleryImages EventGalleryImage[]
+  ticketTypes  TicketType[]
+  orders       Order[]
+  tickets      Ticket[]
+  checkIns     CheckIn[]
+  staffAssignments EventStaffAssignment[]
+
+  @@index([organizerId])
+  @@index([status])
+  @@index([startsAt])
+}

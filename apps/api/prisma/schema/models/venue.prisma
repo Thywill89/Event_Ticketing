@@ -1,0 +1,15 @@
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  city      String?
+  area      String?
+  country   String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  mapUrl    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+}

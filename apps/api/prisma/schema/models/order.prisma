@@ -1,0 +1,33 @@
+/// Purchase transaction. Customers are not Users — contact fields live here.
+model Order {
+  id     String      @id @default(cuid())
+  eventId String
+  status OrderStatus @default(PENDING)
+
+  purchaserName  String
+  purchaserEmail String
+  purchaserPhone String
+
+  currency       String   @default("GHS") @db.Char(3)
+  subtotalAmount Decimal  @db.Decimal(12, 2)
+  totalAmount    Decimal  @db.Decimal(12, 2)
+
+  /// Inventory hold expiry (plan §7.4 temporary reservation)
+  reservedUntil DateTime?
+
+  /// Opaque guest access token for confirmation / stub payment (not a User JWT)
+  accessToken String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event       @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  items   OrderItem[]
+  tickets Ticket[]
+  payment Payment?
+
+  @@index([eventId])
+  @@index([status])
+  @@index([purchaserEmail])
+  @@index([reservedUntil])
+}
