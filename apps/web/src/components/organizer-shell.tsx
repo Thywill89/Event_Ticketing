@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   CalendarDays,
-  ExternalLink,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -69,7 +68,7 @@ export function OrganizerShell({
       <div className="border-b border-sidebar-border px-5 py-5">
         <Link href="/organizer" className="block">
           <p className="font-heading text-sm font-semibold tracking-tight text-sidebar-foreground">
-            EventTicketing
+            EventMe
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {org.displayName}
@@ -98,14 +97,6 @@ export function OrganizerShell({
             </Link>
           );
         })}
-
-        <Link
-          href="/events"
-          className="mt-2 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
-        >
-          <ExternalLink className="size-4 shrink-0 opacity-80" aria-hidden />
-          Public site
-        </Link>
       </nav>
 
       <div className="border-t border-sidebar-border p-3">

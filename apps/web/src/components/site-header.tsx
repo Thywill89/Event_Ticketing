@@ -2,58 +2,74 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
-export function SiteHeader() {
+export function SiteHeader({
+  tone = "default",
+}: {
+  tone?: "default" | "overlay";
+}) {
   const { user, clearSession } = useAuth();
+  const overlay = tone === "overlay";
+
+  const ghostNavClass = cn(
+    buttonVariants({ variant: "ghost", size: "sm" }),
+    overlay && "text-white hover:bg-white/10 hover:text-white",
+  );
 
   return (
-    <header className="border-b border-border/80 bg-background/80 backdrop-blur-sm">
+    <header
+      className={cn(
+        overlay
+          ? "absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-transparent"
+          : "border-b border-border/80 bg-background/80 backdrop-blur-sm",
+      )}
+    >
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
         <nav className="flex items-center gap-4">
           <Link
             href="/"
-            className="font-heading text-sm font-semibold tracking-tight"
+            className={cn(
+              "font-heading text-sm font-semibold tracking-tight",
+              overlay && "text-white",
+            )}
           >
-            EventTicketing
+            EventMe
           </Link>
           <Link
             href="/events"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className={cn(
+              "text-sm transition-colors",
+              overlay
+                ? "text-white/70 hover:text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
           >
             Events
-          </Link>
-          <Link
-            href="/tickets/lookup"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Find ticket
           </Link>
         </nav>
         <div className="flex items-center gap-2">
           {user ? (
             <>
               {user.role === "PLATFORM_ADMIN" ? (
-                <Button variant="ghost" size="sm" render={<Link href="/admin" />}>
+                <Link href="/admin" className={ghostNavClass}>
                   Admin
-                </Button>
+                </Link>
               ) : user.role === "ORGANIZER" ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  render={<Link href="/organizer" />}
-                >
+                <Link href="/organizer" className={ghostNavClass}>
                   Organizer
-                </Button>
+                </Link>
               ) : user.role === "CHECK_IN_STAFF" ? (
-                <Button variant="ghost" size="sm" render={<Link href="/staff" />}>
+                <Link href="/staff" className={ghostNavClass}>
                   Door
-                </Button>
+                </Link>
               ) : null}
               <Button
                 variant="ghost"
                 size="sm"
+                className={overlay ? "text-white hover:bg-white/10 hover:text-white" : undefined}
                 onClick={() => {
                   clearSession();
                 }}
@@ -62,14 +78,19 @@ export function SiteHeader() {
               </Button>
             </>
           ) : (
-            <>
-              <Button variant="ghost" size="sm" render={<Link href="/login" />}>
-                Sign in
-              </Button>
-              <Button size="sm" render={<Link href="/register" />}>
-                Register
-              </Button>
-            </>
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({
+                  variant: overlay ? "default" : "ghost",
+                  size: "sm",
+                }),
+                overlay &&
+                  "border-white/25 bg-white text-[oklch(0.18_0.02_220)] hover:bg-white/90",
+              )}
+            >
+              Sign in
+            </Link>
           )}
         </div>
       </div>

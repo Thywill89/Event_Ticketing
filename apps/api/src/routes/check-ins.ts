@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { z } from "zod";
-import type {
-  CheckInListResponse,
-  CheckInResponse,
-  CheckInStatsResponse,
-  StaffEventListResponse,
-} from "@event-ticketing/shared";
+import {
+  performCheckInSchema,
+  type CheckInListResponse,
+  type CheckInResponse,
+  type CheckInStatsResponse,
+  type StaffEventListResponse,
+} from "@event-me/shared";
 import {
   CheckInError,
   getCheckInStats,
@@ -17,11 +17,6 @@ import { requireEventCheckInAccess } from "../middleware/event-check-in-access";
 import { prisma } from "../db";
 
 export const checkInsRouter = Router();
-
-const checkInBodySchema = z.object({
-  code: z.string().trim().min(1).max(200),
-  deviceLabel: z.string().trim().min(1).max(80).optional(),
-});
 
 function handleCheckInError(
   res: { status: (code: number) => { json: (body: unknown) => void } },
@@ -91,7 +86,7 @@ checkInsRouter.post(
   requireEventCheckInAccess,
   async (req, res) => {
     const eventId = String(req.params.eventId);
-    const parsed = checkInBodySchema.safeParse(req.body);
+    const parsed = performCheckInSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid request",

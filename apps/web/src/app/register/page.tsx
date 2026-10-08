@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import { registerOrganizerSchema } from "@event-me/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,40 +15,48 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, registerOrganizer } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { blankAsUndefined } from "@/lib/form-schemas";
+
+const registerFormSchema = registerOrganizerSchema.extend({
+  phone: blankAsUndefined(registerOrganizerSchema.shape.phone),
+});
+
+type RegisterFormInput = z.input<typeof registerFormSchema>;
+type RegisterFormOutput = z.output<typeof registerFormSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
   const { setSession } = useAuth();
-  const [fullName, setFullName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormInput, unknown, RegisterFormOutput>({
+    resolver: zodResolver(registerFormSchema),
+    defaultValues: {
+      fullName: "",
+      displayName: "",
+      email: "",
+      phone: "",
+      password: "",
+    },
+  });
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
+  async function onSubmit(values: RegisterFormOutput) {
     try {
-      const result = await registerOrganizer({
-        email,
-        password,
-        fullName,
-        displayName,
-        phone: phone.trim() || undefined,
-      });
+      const result = await registerOrganizer(values);
       setSession(result.token, result.user);
       router.push("/organizer");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Registration failed");
-    } finally {
-      setSubmitting(false);
+      setError("root", {
+        message: err instanceof ApiError ? err.message : "Registration failed",
+      });
     }
   }
 
@@ -59,29 +70,30 @@ export default function RegisterPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4" onSubmit={onSubmit}>
-            {error ? (
+          <form className="grid gap-4" noValidate onSubmit={handleSubmit(onSubmit)}>
+            {errors.root?.message ? (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{errors.root.message}</AlertDescription>
               </Alert>
             ) : null}
             <div className="grid gap-2">
               <Label htmlFor="fullName">Full name</Label>
               <Input
                 id="fullName"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
+                aria-invalid={errors.fullName ? true : undefined}
+                {...register("fullName")}
               />
+              <FieldError message={errors.fullName?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="displayName">Organizer display name</Label>
               <Input
                 id="displayName"
-                required
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                aria-invalid={errors.displayName ? true : undefined}
+                {...register("displayName")}
               />
+              <FieldError message={errors.displayName?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
@@ -89,19 +101,21 @@ export default function RegisterPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={errors.email ? true : undefined}
+                {...register("email")}
               />
+              <FieldError message={errors.email?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
               <Input
                 id="phone"
                 type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
+                aria-invalid={errors.phone ? true : undefined}
+                {...register("phone")}
               />
+              <FieldError message={errors.phone?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password (min 8)</Label>
@@ -109,14 +123,13 @@ export default function RegisterPage() {
                 id="password"
                 type="password"
                 autoComplete="new-password"
-                minLength={8}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={errors.password ? true : undefined}
+                {...register("password")}
               />
+              <FieldError message={errors.password?.message} />
             </div>
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? "Creating…" : "Create account"}
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? "Creating…" : "Create account"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">

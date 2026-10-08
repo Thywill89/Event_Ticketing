@@ -1,0 +1,492 @@
+.composer {
+  --ember: oklch(0.55 0.14 45);
+  --stage: oklch(0.16 0.02 55);
+  --paper: oklch(0.99 0.005 85);
+  --field: oklch(0.965 0.008 85);
+  --muted: oklch(0.45 0.02 55);
+  --line: oklch(0.9 0.01 85);
+
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 56rem;
+}
+
+@media (min-width: 900px) {
+  .composer {
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+    align-items: start;
+    gap: 1.75rem;
+  }
+}
+
+.coverCol {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.coverFrame {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 30% 20%, oklch(0.75 0.12 55 / 0.55), transparent 55%),
+    radial-gradient(circle at 80% 70%, oklch(0.55 0.14 45 / 0.45), transparent 50%),
+    linear-gradient(145deg, oklch(0.28 0.04 50), oklch(0.14 0.03 40));
+  box-shadow: 0 18px 40px oklch(0.2 0.03 45 / 0.18);
+  animation: coverIn 0.55s ease-out both;
+}
+
+.coverImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.coverUpload {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.92);
+  color: var(--stage);
+  cursor: pointer;
+  box-shadow: 0 8px 20px oklch(0.2 0.02 40 / 0.25);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.coverUpload:hover {
+  transform: scale(1.05);
+  background: white;
+}
+
+.coverUpload:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+.coverHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.detailsCol {
+  display: grid;
+  gap: 0.85rem;
+  animation: detailsIn 0.6s ease-out 0.08s both;
+}
+
+.nameInput {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+  font-size: clamp(1.85rem, 4vw, 2.35rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--foreground);
+  outline: none;
+}
+
+.nameInput::placeholder {
+  color: oklch(0.72 0.01 55);
+}
+
+.fieldCard {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: var(--field);
+  border: 1px solid var(--line);
+}
+
+.whenGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem 0.85rem;
+  align-items: center;
+}
+
+.whenLabels {
+  display: grid;
+  gap: 0.55rem;
+  position: relative;
+  padding-right: 0.35rem;
+}
+
+.whenLabels::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  bottom: 0.85rem;
+  left: 0.35rem;
+  width: 1px;
+  border-left: 1px dashed oklch(0.78 0.02 55);
+}
+
+.whenLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.whenDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--ember);
+  box-shadow: 0 0 0 3px oklch(0.72 0.12 55 / 0.25);
+}
+
+.whenDotEnd {
+  background: transparent;
+  border: 1.5px solid var(--ember);
+  box-shadow: none;
+}
+
+.whenInputs {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.whenRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  border-radius: 0.9rem;
+  background: oklch(1 0 0 / 0.78);
+  border: 1px solid oklch(0.9 0.01 85);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55);
+}
+
+.whenChip {
+  position: relative;
+  display: flex;
+  min-height: 2.75rem;
+  width: 100%;
+  align-items: center;
+  padding: 0 0.95rem;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: left;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.whenChip:hover {
+  background: oklch(0.55 0.08 55 / 0.06);
+}
+
+.dateWrap,
+.timeWrap {
+  position: relative;
+}
+
+.timeWrap {
+  border-left: 1px solid oklch(0.9 0.01 85);
+}
+
+.dateChip {
+  border-radius: 0.9rem 0 0 0.9rem;
+}
+
+.timeChip {
+  border-radius: 0 0.9rem 0.9rem 0;
+}
+
+.whenChipEmpty {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.whenNative {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dateMenu,
+.timeMenu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  z-index: 40;
+  border-radius: 1rem;
+  background: oklch(0.2 0.02 55);
+  color: oklch(0.97 0.01 85);
+  box-shadow: 0 18px 44px oklch(0.16 0.03 45 / 0.4);
+  animation: menuIn 0.16s ease-out;
+}
+
+.dateMenu {
+  left: 0;
+  width: 17.5rem;
+  padding: 0.75rem;
+}
+
+.timeMenu {
+  right: 0;
+  display: grid;
+  width: 8.5rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.dateMenuHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.dateMenuTitle {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dateNavBtn {
+  display: inline-flex;
+  height: 1.85rem;
+  width: 1.85rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+
+.dateNavBtn:hover {
+  background: oklch(1 0 0 / 0.14);
+}
+
+.dateWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: oklch(0.78 0.02 70);
+  text-align: center;
+}
+
+.dateGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+
+.dateDay,
+.dateDayEmpty {
+  display: flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.dateDay {
+  cursor: pointer;
+}
+
+.dateDay:hover {
+  background: oklch(1 0 0 / 0.1);
+}
+
+.dateDayToday {
+  box-shadow: inset 0 0 0 1px oklch(0.72 0.12 55 / 0.8);
+}
+
+.dateDayActive {
+  background: oklch(0.55 0.12 55);
+  color: white;
+  font-weight: 600;
+}
+
+.dateDayActive:hover {
+  background: oklch(0.55 0.12 55);
+}
+
+.timeOption {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.timeOption:hover {
+  background: oklch(1 0 0 / 0.08);
+}
+
+.timeOptionActive {
+  background: oklch(0.55 0.12 55);
+  color: white;
+}
+
+.timeOptionActive:hover {
+  background: oklch(0.55 0.12 55);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.iconField {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.iconWrap {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  background: oklch(1 0 0 / 0.7);
+  color: var(--stage);
+}
+
+.iconFieldBody {
+  display: grid;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.iconFieldLabel {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ticketList {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ticketRow {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.35rem;
+}
+
+@media (min-width: 640px) {
+  .ticketRow {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.8fr) auto;
+    align-items: end;
+  }
+}
+
+.ticketHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.submitBar {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.submitBtn {
+  width: 100%;
+  height: 2.85rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+@keyframes coverIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes detailsIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coverFrame,
+  .detailsCol,
+  .dateMenu,
+  .timeMenu {
+    animation: none;
+  }
+
+  .coverUpload,
+  .whenChip {
+    transition: none;
+  }
+}

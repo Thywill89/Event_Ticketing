@@ -1,20 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import type {
-  CheckInListItemDto,
-  CheckInResponse,
-  CheckInStatsDto,
-  EventStatus,
-} from "@event-ticketing/shared";
-import { CHECK_IN_ALLOWED_EVENT_STATUSES } from "@event-ticketing/shared";
+import { useCallback, useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import {
+  CHECK_IN_ALLOWED_EVENT_STATUSES,
+  performCheckInSchema,
+  type CheckInListItemDto,
+  type CheckInResponse,
+  type CheckInStatsDto,
+  type EventStatus,
+} from "@event-me/shared";
 import { CheckInShell } from "@/components/check-in-shell";
 import { QrScanner } from "@/components/qr-scanner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,6 +44,9 @@ function entryAllowed(status: EventStatus | null): boolean {
   return (CHECK_IN_ALLOWED_EVENT_STATUSES as readonly string[]).includes(status);
 }
 
+const checkInFormSchema = performCheckInSchema.pick({ code: true });
+type CheckInFormValues = z.infer<typeof checkInFormSchema>;
+
 export default function EventCheckInPage() {
   const params = useParams<{ id: string }>();
   const eventId = params.id;
@@ -47,12 +54,25 @@ export default function EventCheckInPage() {
 
   const [eventName, setEventName] = useState<string>("Check-in");
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
-  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckInResponse | null>(null);
   const [stats, setStats] = useState<CheckInStatsDto | null>(null);
   const [recent, setRecent] = useState<CheckInListItemDto[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    reset,
+    formState: { errors },
+  } = useForm<CheckInFormValues>({
+    resolver: zodResolver(checkInFormSchema),
+    defaultValues: { code: "" },
+  });
+  const code = useWatch({ control, name: "code" });
 
   const refreshMeta = useCallback(async () => {
     if (!token || !eventId) return;
@@ -87,19 +107,18 @@ export default function EventCheckInPage() {
     void refreshMeta();
   }, [refreshMeta]);
 
-  async function submitCode(raw: string) {
-    const trimmed = raw.trim();
-    if (!token || !eventId || !trimmed || busy) return;
+  async function submitCode(values: CheckInFormValues) {
+    if (!token || !eventId || busy) return;
 
     setBusy(true);
     setResult(null);
     try {
       const data = await performCheckIn(token, eventId, {
-        code: trimmed,
+        code: values.code,
         deviceLabel: "web-door",
       });
       setResult(data);
-      setCode("");
+      reset({ code: "" });
       await refreshMeta();
     } catch (err) {
       if (err instanceof ApiError && err.checkIn) {
@@ -118,9 +137,14 @@ export default function EventCheckInPage() {
     }
   }
 
-  function onManualSubmit(e: FormEvent) {
-    e.preventDefault();
-    void submitCode(code);
+  function onScan(text: string) {
+    setValue("code", text);
+    const parsed = checkInFormSchema.safeParse({ code: text });
+    if (!parsed.success) {
+      setError("code", { message: parsed.error.issues[0]?.message });
+      return;
+    }
+    void submitCode(parsed.data);
   }
 
   const backHref =
@@ -133,16 +157,8 @@ export default function EventCheckInPage() {
   return (
     <CheckInShell
       title={eventName}
-      actions={
-        <div className="flex items-center gap-2">
-          {eventStatus ? (
-            <Badge variant="secondary">{formatEventStatus(eventStatus)}</Badge>
-          ) : null}
-          <Button variant="outline" render={<Link href={backHref} />}>
-            Back
-          </Button>
-        </div>
-      }
+      backHref={backHref}
+      actions={eventStatus ? <EventStatusBadge status={eventStatus} /> : null}
     >
       {loadError ? (
         <Alert variant="destructive" className="mb-4">
@@ -185,7 +201,7 @@ export default function EventCheckInPage() {
           </p>
         </div>
 
-        <form onSubmit={onManualSubmit} className="grid gap-3">
+        <form noValidate onSubmit={handleSubmit(submitCode)} className="grid gap-3">
           <div className="grid gap-2">
             <Label htmlFor="code">QR token or ticket number</Label>
             <Input
@@ -193,23 +209,18 @@ export default function EventCheckInPage() {
               autoComplete="off"
               autoFocus
               placeholder="Paste code…"
-              value={code}
-              disabled={busy}
-              onChange={(e) => setCode(e.target.value)}
+              readOnly={busy}
+              aria-invalid={errors.code ? true : undefined}
+              {...register("code")}
             />
+            <FieldError message={errors.code?.message} />
           </div>
-          <Button type="submit" disabled={busy || !code.trim()}>
+          <Button type="submit" disabled={busy || !code?.trim()}>
             {busy ? "Checking…" : "Check in"}
           </Button>
         </form>
 
-        <QrScanner
-          disabled={busy}
-          onScan={(text) => {
-            setCode(text);
-            void submitCode(text);
-          }}
-        />
+        <QrScanner disabled={busy} onScan={onScan} />
       </section>
 
       {result ? (

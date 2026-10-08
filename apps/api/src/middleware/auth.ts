@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { UserRole } from "@event-ticketing/shared";
+import type { UserRole } from "@event-me/shared";
 import { verifyAccessToken, type AccessTokenPayload } from "../lib/jwt";
 import { prisma } from "../db";
 

@@ -2,8 +2,8 @@ import type {
   PublicEventDto,
   PublicEventStatus,
   PublicTicketTypeDto,
-} from "@event-ticketing/shared";
-import { PUBLIC_EVENT_STATUSES } from "@event-ticketing/shared";
+} from "@event-me/shared";
+import { PUBLIC_EVENT_STATUSES } from "@event-me/shared";
 import type { Event, Organizer, Prisma, TicketType, Venue } from "../../prisma/generated";
 import { toVenueDto } from "./event-mappers";
 

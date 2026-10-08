@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { StaffEventDto } from "@event-ticketing/shared";
+import type { StaffEventDto } from "@event-me/shared";
 import { CheckInShell } from "@/components/check-in-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
 import { ApiError, listStaffEvents } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatEventStatus } from "@/lib/event-status";
-
 export default function StaffHomePage() {
   const { token, user } = useAuth();
   const [events, setEvents] = useState<StaffEventDto[]>([]);
@@ -84,7 +82,7 @@ export default function StaffHomePage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary">{formatEventStatus(ev.status)}</Badge>
+                <EventStatusBadge status={ev.status} />
                 <Button render={<Link href={`/organizer/events/${ev.id}/check-in`} />}>
                   Open check-in
                 </Button>

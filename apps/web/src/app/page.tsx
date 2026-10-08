@@ -1,28 +1,71 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { SiteHeader } from "@/components/site-header";
+import styles from "./page.module.css";
+
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=2400&q=80";
 
 export default function Home() {
   return (
-    <div className="flex min-h-svh flex-col bg-[radial-gradient(ellipse_at_top,_oklch(0.97_0.01_250),_oklch(0.985_0_0)_55%)]">
-      <SiteHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-8 px-4 py-16">
-        <div className="space-y-3">
-          <h1 className="font-heading text-4xl font-semibold tracking-tight">
-            EventTicketing
-          </h1>
-          <p className="max-w-xl text-muted-foreground">
-            Discover published events and buy tickets without an account.
-            Organizers manage events, staff, and door check-in from their workspace.
+    <div className={styles.page}>
+      <div className={styles.hero}>
+        <SiteHeader tone="overlay" />
+        <div className={styles.heroMedia} aria-hidden>
+          <Image
+            src={HERO_IMAGE}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className={styles.heroImage}
+          />
+          <div className={styles.heroScrim} />
+          <div className={styles.heroGrain} />
+        </div>
+        <div className={styles.heroInner}>
+          <h1 className={styles.brand}>EventMe</h1>
+          <p className={styles.headline}>The door opens when the ticket does.</p>
+          <p className={styles.support}>
+            Browse live events and buy as a guest—no account required.
           </p>
+          <div className={styles.ctas}>
+            <Link href="/events" className={styles.ctaPrimary}>
+              Browse events
+            </Link>
+            <Link href="/login" className={styles.ctaSecondary}>
+              Create First Event
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button render={<Link href="/events" />}>Browse events</Button>
-          <Button variant="outline" render={<Link href="/tickets/lookup" />}>
-            Find my ticket
-          </Button>
+      </div>
+
+      <section className={styles.band} aria-label="How it works">
+        <div className={styles.bandBlock}>
+          <p className={styles.bandEyebrow}>For attendees</p>
+          <h2 className={styles.bandTitle}>Pick a show. Pay. Walk in.</h2>
+          <p className={styles.bandCopy}>
+            Browse what&apos;s live, checkout in minutes, and bring your ticket
+            QR to the door.
+          </p>
+          <Link href="/events" className={styles.bandLink}>
+            See what&apos;s on
+          </Link>
         </div>
-      </main>
+        <div className={styles.bandBlock}>
+          <p className={styles.bandEyebrow}>For organizers</p>
+          <h2 className={styles.bandTitle}>
+            Listings, staff, and door check-in—one desk.
+          </h2>
+          <p className={styles.bandCopy}>
+            Publish events, manage ticket types, and scan arrivals without
+            juggling separate tools.
+          </p>
+          <Link href="/login" className={styles.bandLink}>
+            Sign in to organize
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

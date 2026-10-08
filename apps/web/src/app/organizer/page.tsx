@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   EventDto,
   OrganizerDashboardStatsDto,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import {
   ArrowRight,
   CalendarDays,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -27,8 +27,6 @@ import {
 import { ApiError, getOrganizerDashboard, listOrganizerEvents } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatEventWhen } from "@/lib/datetime";
-import { formatEventStatus } from "@/lib/event-status";
-
 export default function OrganizerDashboardPage() {
   const { token, user } = useAuth();
   const [stats, setStats] = useState<OrganizerDashboardStatsDto | null>(null);
@@ -72,7 +70,7 @@ export default function OrganizerDashboardPage() {
           </Button>
           <Button size="sm" render={<Link href="/organizer/events/new" />}>
             <Plus className="size-3.5" aria-hidden />
-            New event
+            Create Event
           </Button>
         </div>
       }
@@ -81,7 +79,7 @@ export default function OrganizerDashboardPage() {
         <Alert className="mb-6">
           <AlertDescription>
             Your organizer account is pending platform approval. You can create
-            drafts and submit events for review, but publishing requires approval.
+            and submit events for review, but publishing requires approval.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -141,7 +139,7 @@ export default function OrganizerDashboardPage() {
                 <div className="space-y-1">
                   <p className="font-medium">Manage events</p>
                   <p className="text-sm text-muted-foreground">
-                    Create drafts, submit for review, and run the door.
+                    Create events, submit for review, and run the door.
                   </p>
                 </div>
                 <span className="mt-auto inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
@@ -184,7 +182,7 @@ export default function OrganizerDashboardPage() {
               <p className="text-sm text-muted-foreground">
                 No events yet.{" "}
                 <Link href="/organizer/events/new" className="underline">
-                  Create a draft
+                  Create Event
                 </Link>
                 .
               </p>
@@ -204,9 +202,7 @@ export default function OrganizerDashboardPage() {
                       <TableRow key={event.id}>
                         <TableCell className="font-medium">{event.name}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {formatEventStatus(event.status)}
-                          </Badge>
+                          <EventStatusBadge status={event.status} />
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatEventWhen(event.startsAt, event.endsAt)}

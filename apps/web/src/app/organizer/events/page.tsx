@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import type { EventDto } from "@event-ticketing/shared";
+import { useCallback, useEffect, useState } from "react";
+import { isEventDeletable, type EventDto } from "@event-me/shared";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { DeleteEventDialog } from "@/components/delete-event-dialog";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -18,45 +19,44 @@ import {
 import { ApiError, listOrganizerEvents } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatEventWhen } from "@/lib/datetime";
-import { formatEventStatus } from "@/lib/event-status";
-
 export default function OrganizerEventsPage() {
   const { token } = useAuth();
   const [events, setEvents] = useState<EventDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EventDto | null>(null);
+
+  const load = useCallback(async () => {
     if (!token) return;
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await listOrganizerEvents(token!);
-        if (!cancelled) setEvents(data);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load events");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listOrganizerEvents(token);
+      setEvents(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load events");
+    } finally {
+      setLoading(false);
     }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [token]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function openDelete(event: EventDto) {
+    setDeleteTarget(event);
+    setDeleteOpen(true);
+  }
 
   return (
     <OrganizerShell
       title="Events"
-      description="Create drafts, submit for review, and manage live events."
+      description="Create events, submit for review, and manage live events."
       actions={
-        <Button render={<Link href="/organizer/events/new" />}>New draft event</Button>
+        <Button render={<Link href="/organizer/events/new" />}>Create Event</Button>
       }
     >
       {error ? (
@@ -70,10 +70,10 @@ export default function OrganizerEventsPage() {
       ) : events.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-background/60 px-6 py-12 text-center">
           <p className="text-sm text-muted-foreground">
-            No events yet. Create a draft to configure details and ticket types.
+            No events yet. Create an event with details and ticket types.
           </p>
           <Button className="mt-4" render={<Link href="/organizer/events/new" />}>
-            Create draft event
+            Create Event
           </Button>
         </div>
       ) : (
@@ -83,7 +83,7 @@ export default function OrganizerEventsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>When</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Tickets</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -93,20 +93,31 @@ export default function OrganizerEventsPage() {
                 <TableRow key={event.id}>
                   <TableCell className="font-medium">{event.name}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{formatEventStatus(event.status)}</Badge>
+                    <EventStatusBadge status={event.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatEventWhen(event.startsAt, event.endsAt)}
                   </TableCell>
                   <TableCell>{event.ticketTypes?.length ?? 0}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      render={<Link href={`/organizer/events/${event.id}`} />}
-                    >
-                      {event.status === "DRAFT" ? "Edit" : "Open"}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        render={<Link href={`/organizer/events/${event.id}`} />}
+                      >
+                        {event.status === "DRAFT" ? "Edit" : "View"}
+                      </Button>
+                      {isEventDeletable(event.status) ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => openDelete(event)}
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -114,6 +125,14 @@ export default function OrganizerEventsPage() {
           </Table>
         </div>
       )}
+
+      <DeleteEventDialog
+        token={token}
+        event={deleteTarget}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={load}
+      />
     </OrganizerShell>
   );
 }

@@ -8,12 +8,11 @@ Currency defaults to **GHS** (major units in the DB). Paystack amounts are sent 
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /payments/config` | `{ provider, stubAllowed, publicKey }` for the web UI |
-| `POST /events/:eventId/orders` | Soft-reserve + `PENDING` payment (`provider: paystack` when keys set, else `stub`) |
+| `GET /payments/config` | `{ provider, publicKey }` for the web UI |
+| `POST /events/:eventId/orders` | Soft-reserve + `PENDING` payment (`provider: paystack`; requires Paystack keys) |
 | `POST /orders/:orderId/payments/initialize` | Paystack `transaction/initialize` → `authorizationUrl` / `accessCode` / `reference` |
 | `POST /orders/:orderId/payments/verify` | Optional client callback: verify reference with Paystack → fulfill |
 | `POST /payments/webhook` | Paystack webhooks (`x-paystack-signature` HMAC SHA512) |
-| `POST /orders/:orderId/payments/stub-complete` | Local stub only (gated — see below) |
 
 ## Environment variables (`apps/api/.env`)
 
@@ -25,9 +24,6 @@ PAYSTACK_PUBLIC_KEY=pk_test_...
 
 # Absolute web origin for Paystack callback_url (no trailing slash)
 PUBLIC_WEB_URL=http://localhost:3000
-
-# Force stub payments even when Paystack keys are set (local only)
-# ALLOW_STUB_PAYMENTS=true
 ```
 
 Do **not** put the secret key in the Next.js app. The public key is returned from `GET /payments/config` when needed (e.g. Popup). Redirect checkout only needs the API `authorizationUrl`.
@@ -63,14 +59,7 @@ Root `.env.example` / `apps/api/.env.example` list the same placeholders.
    - enqueue order-confirmation email
 5. **Also:** browser return URL triggers `POST …/payments/verify` (same fulfillment path; safe if webhook already ran).
 
-## Stub payments (local without keys)
-
-Stub remains for local testing when:
-
-- `ALLOW_STUB_PAYMENTS=true`, **or**
-- `NODE_ENV` is **not** `production` **and** `PAYSTACK_SECRET_KEY` is unset
-
-In production with Paystack configured, stub is **off**. Do not set `ALLOW_STUB_PAYMENTS` in production.
+Orders cannot be created without Paystack configured (`PAYSTACK_SECRET_KEY`).
 
 ## Reservation expiry cron
 

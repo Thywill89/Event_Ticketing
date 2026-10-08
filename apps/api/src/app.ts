@@ -13,7 +13,6 @@ import { organizerEventsRouter } from "./routes/organizer-events";
 import { organizerOpsRouter } from "./routes/organizer-ops";
 import { organizerStaffRouter } from "./routes/organizer-staff";
 import { publicEventsRouter } from "./routes/public-events";
-import { ticketsLookupRouter } from "./routes/tickets-lookup";
 
 export function createApp() {
   const app = express();
@@ -54,7 +53,6 @@ export function createApp() {
   app.use(authRouter);
   app.use(publicEventsRouter);
   app.use(ordersRouter);
-  app.use(ticketsLookupRouter);
   app.use(checkInsRouter);
   app.use(adminEventsRouter);
   app.use(adminPlatformRouter);

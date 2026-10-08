@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AdminEventDto } from "@event-ticketing/shared";
+import type { AdminEventDto, EventStatus } from "@event-me/shared";
 import { AdminShell } from "@/components/admin-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,15 +27,19 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ApiError,
   approveAdminEvent,
+  deleteAdminDraftEvent,
   listAdminEvents,
   rejectAdminEvent,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatEventWhen } from "@/lib/datetime";
-import { formatEventStatus } from "@/lib/event-status";
+import { cn } from "@/lib/utils";
+
+type AdminEventTab = Extract<EventStatus, "PENDING_REVIEW" | "DRAFT">;
 
 export default function AdminEventsPage() {
   const { token } = useAuth();
+  const [tab, setTab] = useState<AdminEventTab>("PENDING_REVIEW");
   const [events, setEvents] = useState<AdminEventDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,19 +50,29 @@ export default function AdminEventsPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState<string | null>(null);
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminEventDto | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await listAdminEvents(token, "PENDING_REVIEW");
+      const data = await listAdminEvents(token, tab);
       setEvents(data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load pending events");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : tab === "DRAFT"
+            ? "Failed to load draft events"
+            : "Failed to load pending events",
+      );
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, tab]);
 
   useEffect(() => {
     void load();
@@ -103,16 +117,59 @@ export default function AdminEventsPage() {
     }
   }
 
+  function openDelete(event: AdminEventDto) {
+    setDeleteTarget(event);
+    setDeleteError(null);
+    setDeleteOpen(true);
+  }
+
+  async function onDeleteConfirm() {
+    if (!token || !deleteTarget) return;
+    setBusyId(deleteTarget.id);
+    setDeleteError(null);
+    try {
+      await deleteAdminDraftEvent(token, deleteTarget.id);
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <AdminShell
       title="Event review"
-      description="Approve or reject organizer submissions waiting to go live."
+      description="Review submissions or remove abandoned drafts."
       actions={
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           Refresh
         </Button>
       }
     >
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={tab === "PENDING_REVIEW" ? "default" : "outline"}
+          className={cn(tab === "PENDING_REVIEW" && "pointer-events-none")}
+          onClick={() => setTab("PENDING_REVIEW")}
+        >
+          Pending review
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={tab === "DRAFT" ? "default" : "outline"}
+          className={cn(tab === "DRAFT" && "pointer-events-none")}
+          onClick={() => setTab("DRAFT")}
+        >
+          Drafts
+        </Button>
+      </div>
+
       {error ? (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{error}</AlertDescription>
@@ -120,11 +177,15 @@ export default function AdminEventsPage() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading pending events…</p>
+        <p className="text-sm text-muted-foreground">
+          {tab === "DRAFT" ? "Loading drafts…" : "Loading pending events…"}
+        </p>
       ) : events.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-background/60 px-6 py-12 text-center">
           <p className="text-sm text-muted-foreground">
-            No events waiting for review. Organizers submit drafts from their event page.
+            {tab === "DRAFT"
+              ? "No draft events right now."
+              : "No events waiting for review. Organizers submit drafts from their event page."}
           </p>
         </div>
       ) : (
@@ -145,7 +206,7 @@ export default function AdminEventsPage() {
                   <TableCell>
                     <div className="font-medium">{event.name}</div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="secondary">{formatEventStatus(event.status)}</Badge>
+                      <EventStatusBadge status={event.status} />
                       <span>{event.category ?? "Uncategorized"}</span>
                     </div>
                   </TableCell>
@@ -160,23 +221,34 @@ export default function AdminEventsPage() {
                   </TableCell>
                   <TableCell>{event.ticketTypes?.length ?? 0}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    {tab === "DRAFT" ? (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="destructive"
                         disabled={busyId === event.id}
-                        onClick={() => openReject(event)}
+                        onClick={() => openDelete(event)}
                       >
-                        Reject
+                        {busyId === event.id ? "Working…" : "Delete"}
                       </Button>
-                      <Button
-                        size="sm"
-                        disabled={busyId === event.id}
-                        onClick={() => void onApprove(event)}
-                      >
-                        {busyId === event.id ? "Working…" : "Approve"}
-                      </Button>
-                    </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === event.id}
+                          onClick={() => openReject(event)}
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={busyId === event.id}
+                          onClick={() => void onApprove(event)}
+                        >
+                          {busyId === event.id ? "Working…" : "Approve"}
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -218,6 +290,35 @@ export default function AdminEventsPage() {
               onClick={() => void onRejectConfirm()}
             >
               {busyId === rejectTarget?.id ? "Rejecting…" : "Reject to draft"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete draft event</DialogTitle>
+            <DialogDescription>
+              Permanently deletes {deleteTarget?.name ?? "this draft"}. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busyId === deleteTarget?.id}
+              onClick={() => void onDeleteConfirm()}
+            >
+              {busyId === deleteTarget?.id ? "Deleting…" : "Delete draft"}
             </Button>
           </DialogFooter>
         </DialogContent>

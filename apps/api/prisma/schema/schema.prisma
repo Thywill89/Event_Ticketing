@@ -1,4 +1,4 @@
-// Event Ticketing — core domain schema (architecture plan §12)
+// EventMe — core domain schema (architecture plan §12)
 // Relationships:
 //   User 1—0..1 Organizer
 //   Organizer 1—* Event, OrganizerStaff

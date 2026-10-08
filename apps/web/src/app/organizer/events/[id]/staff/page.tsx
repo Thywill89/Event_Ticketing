@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   EventStaffAssignmentDto,
   OrganizerStaffDto,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

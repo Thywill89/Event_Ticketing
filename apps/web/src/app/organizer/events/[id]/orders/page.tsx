@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import type { OrganizerOrderSummaryDto } from "@event-ticketing/shared";
+import type { OrganizerOrderSummaryDto } from "@event-me/shared";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

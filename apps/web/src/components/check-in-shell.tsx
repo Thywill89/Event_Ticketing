@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { loginPathWithNext, useAuth } from "@/lib/auth";
 
@@ -13,10 +14,13 @@ export function CheckInShell({
   title,
   children,
   actions,
+  backHref,
 }: {
   title: string;
   children: ReactNode;
   actions?: ReactNode;
+  /** Shows a back arrow before the title. */
+  backHref?: string;
 }) {
   const { user, loading, clearSession, token } = useAuth();
   const router = useRouter();
@@ -50,7 +54,7 @@ export function CheckInShell({
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
             <Link href={homeHref} className="font-heading text-sm font-semibold tracking-tight">
-              EventTicketing
+              EventMe
             </Link>
             <span className="hidden text-sm text-muted-foreground sm:inline">
               Door check-in · {user.fullName}
@@ -69,8 +73,20 @@ export function CheckInShell({
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {backHref ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Back"
+                render={<Link href={backHref} />}
+              >
+                <ArrowLeft className="size-5" />
+              </Button>
+            ) : null}
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+          </div>
           {actions}
         </div>
         {children}

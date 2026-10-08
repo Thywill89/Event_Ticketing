@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { Suspense } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { loginSchema, type LoginRequest } from "@event-me/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, login } from "@/lib/api";
@@ -21,25 +25,27 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setSession } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginRequest>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
+  async function onSubmit(values: LoginRequest) {
     try {
-      const result = await login({ email, password });
+      const result = await login(values);
       setSession(result.token, result.user);
       router.replace(
         resolvePostLoginPath(result.user.role, searchParams.get("next")),
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Login failed");
-    } finally {
-      setSubmitting(false);
+      setError("root", {
+        message: err instanceof ApiError ? err.message : "Login failed",
+      });
     }
   }
 
@@ -47,15 +53,12 @@ function LoginForm() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>
-          Organizers manage events; platform admins review submissions.
-        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="grid gap-4" onSubmit={onSubmit}>
-          {error ? (
+        <form className="grid gap-4" noValidate onSubmit={handleSubmit(onSubmit)}>
+          {errors.root?.message ? (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{errors.root.message}</AlertDescription>
             </Alert>
           ) : null}
           <div className="grid gap-2">
@@ -64,10 +67,10 @@ function LoginForm() {
               id="email"
               type="email"
               autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={errors.email ? true : undefined}
+              {...register("email")}
             />
+            <FieldError message={errors.email?.message} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="password">Password</Label>
@@ -75,13 +78,13 @@ function LoginForm() {
               id="password"
               type="password"
               autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={errors.password ? true : undefined}
+              {...register("password")}
             />
+            <FieldError message={errors.password?.message} />
           </div>
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? "Signing in…" : "Sign in"}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">

@@ -9,8 +9,8 @@ import type {
   CheckInTicketSummaryDto,
   EventStatus,
   TicketStatus,
-} from "@event-ticketing/shared";
-import { CHECK_IN_ALLOWED_EVENT_STATUSES } from "@event-ticketing/shared";
+} from "@event-me/shared";
+import { CHECK_IN_ALLOWED_EVENT_STATUSES } from "@event-me/shared";
 import { prisma } from "../db";
 import { writeAuditLog } from "./audit";
 
@@ -184,8 +184,7 @@ function assertTicketReadyForCheckIn(
     );
   }
 
-  // ISSUED is the post-payment credential state. PAID is transitional / unused
-  // in the stub flow but accepted if present.
+  // ISSUED is the post-payment credential state. PAID is transitional but accepted if present.
   if (ticket.status !== "ISSUED" && ticket.status !== "PAID") {
     throw new CheckInError(
       "Ticket is not paid/issued — entry denied",

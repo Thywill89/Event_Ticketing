@@ -2,11 +2,20 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { PublicEventDto, PublicTicketTypeDto } from "@event-ticketing/shared";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  createOrderSchema,
+  type CreateOrderItemRequest,
+  type CreateOrderRequest,
+  type PublicEventDto,
+  type PublicTicketTypeDto,
+} from "@event-me/shared";
 import { PublicShell } from "@/components/site-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, createOrder, getPublicEvent } from "@/lib/api";
@@ -30,6 +39,12 @@ function lineTotal(tt: PublicTicketTypeDto, qty: number): number {
   return Number(tt.price) * qty;
 }
 
+function toOrderItems(qty: Record<string, number>): CreateOrderItemRequest[] {
+  return Object.entries(qty)
+    .filter(([, quantity]) => quantity > 0)
+    .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
+}
+
 export default function CheckoutPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -37,12 +52,24 @@ export default function CheckoutPage() {
 
   const [event, setEvent] = useState<PublicEventDto | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [purchaserName, setPurchaserName] = useState("");
-  const [purchaserEmail, setPurchaserEmail] = useState("");
-  const [purchaserPhone, setPurchaserPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError: setFormError,
+    formState: { errors, isSubmitting, isSubmitted },
+  } = useForm<CreateOrderRequest>({
+    resolver: zodResolver(createOrderSchema),
+    defaultValues: {
+      purchaserName: "",
+      purchaserEmail: "",
+      purchaserPhone: "",
+      items: [],
+    },
+  });
 
   useEffect(() => {
     if (!slug) return;
@@ -55,11 +82,14 @@ export default function CheckoutPage() {
         const data = await getPublicEvent(slug);
         if (cancelled) return;
         setEvent(data);
+        const preselected = new URLSearchParams(window.location.search).get("ticket");
         const initial: Record<string, number> = {};
         for (const tt of data.ticketTypes ?? []) {
-          initial[tt.id] = 0;
+          initial[tt.id] =
+            tt.id === preselected && tt.isActive && tt.quantityAvailable > 0 ? 1 : 0;
         }
         setQty(initial);
+        setValue("items", toOrderItems(initial));
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -80,7 +110,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, setValue]);
 
   const ticketTypes = event?.ticketTypes ?? [];
   const salesOpen = event?.status === "SALES_OPEN";
@@ -101,45 +131,35 @@ export default function CheckoutPage() {
   const currency = selectedItems[0]?.tt.currency ?? ticketTypes[0]?.currency ?? "GHS";
 
   function setQuantity(ticketTypeId: string, value: number, max: number) {
-    const next = Math.max(0, Math.min(max, Math.floor(value) || 0));
-    setQty((prev) => ({ ...prev, [ticketTypeId]: next }));
+    const nextQty = {
+      ...qty,
+      [ticketTypeId]: Math.max(0, Math.min(max, Math.floor(value) || 0)),
+    };
+    setQty(nextQty);
+    setValue("items", toOrderItems(nextQty), { shouldValidate: isSubmitted });
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(values: CreateOrderRequest) {
     if (!event) return;
-    setError(null);
-
     if (!salesOpen) {
-      setError("Sales are not open for this event.");
-      return;
-    }
-    if (selectedItems.length === 0) {
-      setError("Select at least one ticket.");
+      setFormError("root", { message: "Sales are not open for this event." });
       return;
     }
 
-    setSubmitting(true);
     try {
-      const order = await createOrder(event.id, {
-        purchaserName: purchaserName.trim(),
-        purchaserEmail: purchaserEmail.trim(),
-        purchaserPhone: purchaserPhone.trim(),
-        items: selectedItems.map((row) => ({
-          ticketTypeId: row.tt.id,
-          quantity: row.quantity,
-        })),
-      });
+      const order = await createOrder(event.id, values);
       const params = new URLSearchParams({
         accessToken: order.accessToken,
       });
       router.push(`/orders/${order.id}?${params.toString()}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create order");
-    } finally {
-      setSubmitting(false);
+      setFormError("root", {
+        message: err instanceof ApiError ? err.message : "Failed to create order",
+      });
     }
   }
+
+  const bannerError = error ?? errors.root?.message;
 
   return (
     <PublicShell>
@@ -152,9 +172,9 @@ export default function CheckoutPage() {
         </Link>
       </div>
 
-      {error ? (
+      {bannerError ? (
         <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{bannerError}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -177,7 +197,7 @@ export default function CheckoutPage() {
             ) : null}
           </header>
 
-          <form className="space-y-8" onSubmit={onSubmit}>
+          <form className="space-y-8" noValidate onSubmit={handleSubmit(onSubmit)}>
             <section className="space-y-4">
               <h2 className="font-heading text-lg font-semibold">Tickets</h2>
               {ticketTypes.length === 0 ? (
@@ -233,6 +253,7 @@ export default function CheckoutPage() {
                   })}
                 </ul>
               )}
+              <FieldError message={errors.items?.message} />
             </section>
 
             <section className="space-y-4">
@@ -242,39 +263,33 @@ export default function CheckoutPage() {
                   <Label htmlFor="purchaserName">Full name</Label>
                   <Input
                     id="purchaserName"
-                    required
-                    maxLength={120}
                     autoComplete="name"
-                    value={purchaserName}
-                    onChange={(e) => setPurchaserName(e.target.value)}
-                    disabled={!salesOpen}
+                    aria-invalid={errors.purchaserName ? true : undefined}
+                    {...register("purchaserName", { disabled: !salesOpen })}
                   />
+                  <FieldError message={errors.purchaserName?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="purchaserEmail">Email</Label>
                   <Input
                     id="purchaserEmail"
                     type="email"
-                    required
                     autoComplete="email"
-                    value={purchaserEmail}
-                    onChange={(e) => setPurchaserEmail(e.target.value)}
-                    disabled={!salesOpen}
+                    aria-invalid={errors.purchaserEmail ? true : undefined}
+                    {...register("purchaserEmail", { disabled: !salesOpen })}
                   />
+                  <FieldError message={errors.purchaserEmail?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="purchaserPhone">Phone</Label>
                   <Input
                     id="purchaserPhone"
                     type="tel"
-                    required
-                    minLength={5}
-                    maxLength={40}
                     autoComplete="tel"
-                    value={purchaserPhone}
-                    onChange={(e) => setPurchaserPhone(e.target.value)}
-                    disabled={!salesOpen}
+                    aria-invalid={errors.purchaserPhone ? true : undefined}
+                    {...register("purchaserPhone", { disabled: !salesOpen })}
                   />
+                  <FieldError message={errors.purchaserPhone?.message} />
                 </div>
               </div>
             </section>
@@ -286,8 +301,8 @@ export default function CheckoutPage() {
                   {formatMoney(total.toFixed(2), currency)}
                 </span>
               </p>
-              <Button type="submit" disabled={!salesOpen || submitting}>
-                {submitting ? "Reserving…" : "Place order"}
+              <Button type="submit" disabled={!salesOpen || isSubmitting}>
+                {isSubmitting ? "Reserving…" : "Place order"}
               </Button>
             </section>
           </form>

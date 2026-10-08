@@ -99,7 +99,7 @@ export const env = {
    * When set, POST /orders/expire-reservations requires header X-Cron-Secret.
    */
   cronSecret: process.env.CRON_SECRET?.trim() || "",
-  /** console (default) | smtp (stub until provider wired) */
+  /** console (default) | smtp (nodemailer) */
   emailTransport: (process.env.EMAIL_TRANSPORT?.trim().toLowerCase() ||
     "console") as "console" | "smtp",
   emailFrom: process.env.EMAIL_FROM?.trim() || "",
@@ -112,6 +112,13 @@ export const env = {
    * Falls back to relative paths when unset.
    */
   publicWebUrl: process.env.PUBLIC_WEB_URL?.trim().replace(/\/$/, "") || "",
+  /** Supabase project URL (https://xxxx.supabase.co). */
+  supabaseUrl: process.env.SUPABASE_URL?.trim().replace(/\/$/, "") || "",
+  /** Service role key — server only; never expose to the browser. */
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "",
+  /** Public Storage bucket for event cover/gallery images. */
+  supabaseStorageBucket:
+    process.env.SUPABASE_STORAGE_BUCKET?.trim() || "event-images",
   /** Paystack secret key (sk_test_… / sk_live_…). Required for live payments. */
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() || "",
   /** Paystack public key (pk_test_… / pk_live_…) — safe to expose to the browser. */
@@ -121,25 +128,9 @@ export const env = {
    * leave unset to use PAYSTACK_SECRET_KEY (recommended per Paystack docs).
    */
   paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET?.trim() || "",
-  /**
-   * Force-enable stub payment endpoint even when Paystack is configured.
-   * Never enable in production unless deliberately testing.
-   */
-  allowStubPayments: optionalBool("ALLOW_STUB_PAYMENTS", false),
 };
 
 /** True when Paystack secret key is present. */
 export function isPaystackConfigured(): boolean {
   return Boolean(env.paystackSecretKey);
-}
-
-/**
- * Stub payment is allowed when:
- * - ALLOW_STUB_PAYMENTS=true, or
- * - non-production AND Paystack is not configured (local testing without keys).
- */
-export function isStubPaymentsAllowed(): boolean {
-  if (env.allowStubPayments) return true;
-  if (process.env.NODE_ENV === "production") return false;
-  return !isPaystackConfigured();
 }

@@ -1,151 +1,21 @@
 import { Router } from "express";
-import { z } from "zod";
-import type {
-  OrganizerEventListResponse,
-  OrganizerEventResponse,
-  OrganizerTicketTypeResponse,
-} from "@event-ticketing/shared";
+import {
+  createEventSchema,
+  createTicketTypeSchema,
+  isEventDeletable,
+  updateEventSchema,
+  updateTicketTypeSchema,
+  type OrganizerEventListResponse,
+  type OrganizerEventResponse,
+  type OrganizerTicketTypeResponse,
+} from "@event-me/shared";
 import { Prisma } from "../../prisma/generated";
 import { prisma } from "../db";
+import { writeAuditLog } from "../lib/audit";
 import { toEventDto, toTicketTypeDto } from "../lib/event-mappers";
 import { slugify } from "../lib/slug";
+import { deleteEventImages } from "../lib/uploads";
 import { requireOrganizer } from "../middleware/auth";
-
-const venueInputSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  address: z.string().trim().min(1).max(500),
-  city: z.string().trim().min(1).max(120).nullable().optional(),
-  area: z.string().trim().min(1).max(120).nullable().optional(),
-  country: z.string().trim().min(1).max(120).nullable().optional(),
-  mapUrl: z.string().trim().url().max(2000).nullable().optional(),
-});
-
-const socialLinksSchema = z
-  .record(z.string().trim().min(1).max(64), z.string().trim().url().max(2000))
-  .nullable()
-  .optional();
-
-const createEventSchema = z
-  .object({
-    name: z.string().trim().min(1).max(200),
-    category: z.string().trim().min(1).max(80).nullable().optional(),
-    description: z.string().trim().max(10_000).nullable().optional(),
-    mainImageUrl: z.string().trim().url().max(2000).nullable().optional(),
-    startsAt: z.string().datetime({ offset: true }),
-    endsAt: z.string().datetime({ offset: true }),
-    dressCode: z.string().trim().max(500).nullable().optional(),
-    ageRestriction: z.string().trim().max(200).nullable().optional(),
-    rules: z.string().trim().max(10_000).nullable().optional(),
-    notices: z.string().trim().max(10_000).nullable().optional(),
-    contactDetails: z.string().trim().max(2000).nullable().optional(),
-    socialLinks: socialLinksSchema,
-    venue: venueInputSchema.nullable().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (new Date(data.endsAt) <= new Date(data.startsAt)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["endsAt"],
-        message: "endsAt must be after startsAt",
-      });
-    }
-  });
-
-const updateEventSchema = z
-  .object({
-    name: z.string().trim().min(1).max(200).optional(),
-    category: z.string().trim().min(1).max(80).nullable().optional(),
-    description: z.string().trim().max(10_000).nullable().optional(),
-    mainImageUrl: z.string().trim().url().max(2000).nullable().optional(),
-    startsAt: z.string().datetime({ offset: true }).optional(),
-    endsAt: z.string().datetime({ offset: true }).optional(),
-    dressCode: z.string().trim().max(500).nullable().optional(),
-    ageRestriction: z.string().trim().max(200).nullable().optional(),
-    rules: z.string().trim().max(10_000).nullable().optional(),
-    notices: z.string().trim().max(10_000).nullable().optional(),
-    contactDetails: z.string().trim().max(2000).nullable().optional(),
-    socialLinks: socialLinksSchema,
-    venue: venueInputSchema.nullable().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.startsAt && data.endsAt && new Date(data.endsAt) <= new Date(data.startsAt)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["endsAt"],
-        message: "endsAt must be after startsAt",
-      });
-    }
-  });
-
-const moneySchema = z.union([
-  z.number().finite().nonnegative(),
-  z
-    .string()
-    .trim()
-    .regex(/^\d+(\.\d{1,2})?$/, "Invalid price format"),
-]);
-
-const createTicketTypeSchema = z
-  .object({
-    name: z.string().trim().min(1).max(120),
-    description: z.string().trim().max(2000).nullable().optional(),
-    price: moneySchema,
-    currency: z
-      .string()
-      .trim()
-      .length(3)
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
-    quantityTotal: z.number().int().min(0).max(1_000_000),
-    salesStartsAt: z.string().datetime({ offset: true }).nullable().optional(),
-    salesEndsAt: z.string().datetime({ offset: true }).nullable().optional(),
-    isActive: z.boolean().optional(),
-    sortOrder: z.number().int().min(0).max(10_000).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.salesStartsAt &&
-      data.salesEndsAt &&
-      new Date(data.salesEndsAt) <= new Date(data.salesStartsAt)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["salesEndsAt"],
-        message: "salesEndsAt must be after salesStartsAt",
-      });
-    }
-  });
-
-const updateTicketTypeSchema = z
-  .object({
-    name: z.string().trim().min(1).max(120).optional(),
-    description: z.string().trim().max(2000).nullable().optional(),
-    price: moneySchema.optional(),
-    currency: z
-      .string()
-      .trim()
-      .length(3)
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
-    quantityTotal: z.number().int().min(0).max(1_000_000).optional(),
-    salesStartsAt: z.string().datetime({ offset: true }).nullable().optional(),
-    salesEndsAt: z.string().datetime({ offset: true }).nullable().optional(),
-    isActive: z.boolean().optional(),
-    sortOrder: z.number().int().min(0).max(10_000).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.salesStartsAt &&
-      data.salesEndsAt &&
-      new Date(data.salesEndsAt) <= new Date(data.salesStartsAt)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["salesEndsAt"],
-        message: "salesEndsAt must be after salesStartsAt",
-      });
-    }
-  });
 
 const eventInclude = {
   venue: true,
@@ -283,6 +153,99 @@ organizerEventsRouter.get("/organizer/events/:eventId", async (req, res) => {
     event: toEventDto(event, { includeTicketTypes: true }),
   };
   res.json(body);
+});
+
+/**
+ * DELETE /organizer/events/:eventId — permanently remove an owned event and
+ * everything attached to it: check-ins, tickets, orders (items + payments),
+ * ticket types, gallery, staff assignments, related notifications, an
+ * otherwise-unused venue, and its stored images.
+ * Only allowed while the event is not published / selling / live.
+ */
+organizerEventsRouter.delete("/organizer/events/:eventId", async (req, res) => {
+  const organizerId = req.auth!.organizerId!;
+  const eventId = String(req.params.eventId);
+
+  const existing = await prisma.event.findFirst({
+    where: { id: eventId, organizerId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      venueId: true,
+      _count: { select: { orders: true, tickets: true, checkIns: true } },
+    },
+  });
+  if (!existing) {
+    res.status(404).json({ error: "Event not found" });
+    return;
+  }
+
+  if (!isEventDeletable(existing.status)) {
+    res.status(409).json({
+      error: "Cancel this event before deleting it",
+      status: existing.status,
+      code: "EVENT_NOT_DELETABLE",
+    });
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const [orders, tickets] = await Promise.all([
+      tx.order.findMany({ where: { eventId: existing.id }, select: { id: true } }),
+      tx.ticket.findMany({ where: { eventId: existing.id }, select: { id: true } }),
+    ]);
+
+    await tx.notification.deleteMany({
+      where: {
+        OR: [
+          { entityType: "Event", entityId: existing.id },
+          { entityType: "Order", entityId: { in: orders.map((o) => o.id) } },
+          { entityType: "Ticket", entityId: { in: tickets.map((t) => t.id) } },
+        ],
+      },
+    });
+    await tx.checkIn.deleteMany({ where: { eventId: existing.id } });
+    await tx.ticket.deleteMany({ where: { eventId: existing.id } });
+    await tx.order.deleteMany({ where: { eventId: existing.id } });
+    await tx.event.delete({ where: { id: existing.id } });
+
+    if (existing.venueId) {
+      const stillUsed = await tx.event.count({ where: { venueId: existing.venueId } });
+      if (stillUsed === 0) {
+        await tx.venue.delete({ where: { id: existing.venueId } });
+      }
+    }
+
+    await writeAuditLog(
+      {
+        actorId: req.auth!.sub,
+        action: "event.delete",
+        entityType: "Event",
+        entityId: existing.id,
+        metadata: {
+          name: existing.name,
+          slug: existing.slug,
+          organizerId,
+          status: existing.status,
+          orders: existing._count.orders,
+          tickets: existing._count.tickets,
+          checkIns: existing._count.checkIns,
+          by: "organizer",
+        },
+      },
+      tx,
+    );
+  });
+
+  try {
+    await deleteEventImages(existing.id);
+  } catch (err) {
+    console.error(`Failed to remove stored images for deleted event ${existing.id}`, err);
+  }
+
+  res.status(204).send();
 });
 
 /**

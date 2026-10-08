@@ -7,12 +7,11 @@ import type {
   PaymentDto,
   PaymentStatus,
   TicketStatus,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { prisma } from "../db";
 import {
   env,
   isPaystackConfigured,
-  isStubPaymentsAllowed,
 } from "../config/env";
 import {
   initializePaystackTransaction,
@@ -443,15 +442,13 @@ export async function createOrder(
     now.getTime() + env.orderReservationMinutes * 60_000,
   );
   const accessToken = generateOrderAccessToken();
-  const usePaystack = isPaystackConfigured();
-  if (!usePaystack && !isStubPaymentsAllowed()) {
+  if (!isPaystackConfigured()) {
     throw new OrderError(
       "Payment provider is not configured",
       503,
       "PAYMENTS_NOT_CONFIGURED",
     );
   }
-  const paymentProvider = usePaystack ? "paystack" : "stub";
 
   const orderId = await prisma.$transaction(async (tx) => {
     for (const line of lineSnapshots) {
@@ -493,9 +490,8 @@ export async function createOrder(
         payment: {
           create: {
             status: "PENDING",
-            provider: paymentProvider,
-            providerRef:
-              paymentProvider === "stub" ? `stub_${randomRef()}` : null,
+            provider: "paystack",
+            providerRef: null,
             amount: subtotal,
             currency,
           },
@@ -621,92 +617,6 @@ export async function getOrderForGuest(
 export async function getOrderDetailInternal(
   orderId: string,
 ): Promise<OrderDetailDto> {
-  return toOrderDetailDto(await loadOrderDetail(orderId));
-}
-
-/**
- * Local/dev payment verification stub (plan §8.2 trust rule still applies:
- * browser success alone must not issue tickets — this endpoint is the backend verify step).
- */
-export async function completeStubPayment(
-  orderId: string,
-  access: { accessToken?: string; email?: string },
-): Promise<OrderDetailDto> {
-  if (!isStubPaymentsAllowed()) {
-    throw new OrderError(
-      "Stub payments are disabled",
-      403,
-      "STUB_PAYMENTS_DISABLED",
-    );
-  }
-
-  await expireOrderIfNeeded(orderId);
-
-  const existing = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      items: true,
-      payment: true,
-      tickets: { select: { id: true } },
-    },
-  });
-  if (!existing) {
-    throw new OrderError("Order not found", 404, "ORDER_NOT_FOUND");
-  }
-  assertAccess(existing, access.accessToken, access.email);
-
-  if (existing.status === "PAID" && existing.tickets.length > 0) {
-    return toOrderDetailDto(await loadOrderDetail(orderId));
-  }
-
-  if (existing.status === "CANCELLED") {
-    throw new OrderError(
-      "Order reservation expired or was cancelled",
-      410,
-      "ORDER_EXPIRED",
-    );
-  }
-
-  if (existing.status !== "RESERVED") {
-    throw new OrderError(
-      `Order cannot be paid in status ${existing.status}`,
-      409,
-      "INVALID_ORDER_STATUS",
-    );
-  }
-
-  if (
-    existing.reservedUntil &&
-    existing.reservedUntil.getTime() <= Date.now()
-  ) {
-    await expireOrderIfNeeded(orderId, { force: true });
-    throw new OrderError(
-      "Order reservation expired",
-      410,
-      "ORDER_EXPIRED",
-    );
-  }
-
-  if (!existing.payment || existing.payment.status !== "PENDING") {
-    throw new OrderError(
-      "No pending payment found for this order",
-      409,
-      "PAYMENT_NOT_PENDING",
-    );
-  }
-
-  await fulfillSuccessfulPayment({
-    orderId: existing.id,
-    paymentId: existing.payment.id,
-    provider: "stub",
-    providerRef: existing.payment.providerRef ?? `stub_${randomRef()}`,
-    rawPayload: {
-      provider: "stub",
-      verifiedAt: new Date().toISOString(),
-      note: "Local stub payment — replace with provider webhook verification",
-    },
-  });
-
   return toOrderDetailDto(await loadOrderDetail(orderId));
 }
 

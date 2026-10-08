@@ -1,4 +1,4 @@
-import type { EventStatus } from "@event-ticketing/shared";
+import type { EventStatus } from "@event-me/shared";
 
 export type EventStatusAction =
   | "submit_for_review"

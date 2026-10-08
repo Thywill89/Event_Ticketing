@@ -16,7 +16,7 @@ export function generateQrToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-/** Opaque guest order access token (confirmation URL / stub payment). */
+/** Opaque guest order access token (confirmation URL). */
 export function generateOrderAccessToken(): string {
   return randomBytes(24).toString("base64url");
 }

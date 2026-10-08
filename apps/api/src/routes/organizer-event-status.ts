@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import type {
   EventStatus,
   OrganizerEventResponse,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { prisma } from "../db";
 import { writeAuditLog } from "../lib/audit";
 import { toEventDto } from "../lib/event-mappers";

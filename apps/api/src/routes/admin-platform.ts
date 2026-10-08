@@ -6,7 +6,7 @@ import type {
   AdminOrderListResponse,
   AdminPlatformStatsResponse,
   OrganizerStatus,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { Prisma } from "../../prisma/generated";
 import { prisma } from "../db";
 import { writeAuditLog } from "../lib/audit";

@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import type { UserRole } from "@event-ticketing/shared";
+import type { UserRole } from "@event-me/shared";
 import { env } from "../config/env";
 
 export interface AccessTokenPayload {

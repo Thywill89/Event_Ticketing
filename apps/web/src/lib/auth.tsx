@@ -1,6 +1,6 @@
 "use client";
 
-import type { AuthUserDto } from "@event-ticketing/shared";
+import type { AuthUserDto } from "@event-me/shared";
 import {
   createContext,
   useCallback,
@@ -42,16 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const access = getAccessToken();
 
+        // Access JWT lives in sessionStorage (per tab). A missing token means this
+        // tab has not signed in — do not restore from the shared refresh cookie,
+        // or every new tab would appear logged in.
         if (!access) {
-          // Don't block the UI on refresh — restore session in the background.
-          if (!cancelled) setLoading(false);
-          try {
-            const refreshed = await refreshAccessSession();
-            if (cancelled || !refreshed) return;
-            setToken(refreshed.token);
-            setUser(refreshed.user);
-          } catch {
-            // No refresh cookie / network — stay signed out.
+          if (!cancelled) {
+            setToken(null);
+            setUser(null);
+            setLoading(false);
           }
           return;
         }

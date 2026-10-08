@@ -1,5 +1,4 @@
 import type {
-  AddGalleryImageRequest,
   AdminEventDto,
   AdminEventListResponse,
   AdminEventResponse,
@@ -17,10 +16,10 @@ import type {
   CreateOrganizerStaffRequest,
   CreateTicketTypeRequest,
   EventDto,
-  EventGalleryResponse,
   EventStaffListResponse,
   EventStatus,
   InitializePaymentResponse,
+  LoginRequest,
   LoginResponse,
   OrderDetailDto,
   OrderResponse,
@@ -41,15 +40,14 @@ import type {
   PublicEventListResponse,
   PublicEventResponse,
   RefreshTokenResponse,
+  RegisterOrganizerRequest,
   RejectEventRequest,
   StaffEventListResponse,
-  TicketLookupRequest,
-  TicketLookupResponse,
   TicketTypeDto,
   UpdateEventRequest,
   UpdateOrganizerStaffRequest,
   UpdateTicketTypeRequest,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { getAccessToken, setAccessToken } from "@/lib/access-token";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -190,13 +188,9 @@ export function getApiBaseUrl() {
   return API_URL;
 }
 
-export async function registerOrganizer(input: {
-  email: string;
-  password: string;
-  fullName: string;
-  displayName: string;
-  phone?: string;
-}): Promise<OrganizerRegisterResponse> {
+export async function registerOrganizer(
+  input: RegisterOrganizerRequest,
+): Promise<OrganizerRegisterResponse> {
   return apiRequest<OrganizerRegisterResponse>("/auth/organizer/register", {
     method: "POST",
     body: input,
@@ -204,10 +198,7 @@ export async function registerOrganizer(input: {
   });
 }
 
-export async function login(input: {
-  email: string;
-  password: string;
-}): Promise<LoginResponse> {
+export async function login(input: LoginRequest): Promise<LoginResponse> {
   return apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
     body: input,
@@ -271,6 +262,16 @@ export async function updateOrganizerEvent(
     { method: "PATCH", token, body },
   );
   return data.event;
+}
+
+export async function deleteOrganizerEvent(
+  token: string,
+  eventId: string,
+): Promise<void> {
+  await apiRequest<null>(`/organizer/events/${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function createTicketType(
@@ -421,6 +422,16 @@ export async function cancelAdminEvent(
   return data.event;
 }
 
+export async function deleteAdminDraftEvent(
+  token: string,
+  eventId: string,
+): Promise<void> {
+  await apiRequest<null>(`/admin/events/${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
 export async function listPublicEvents(query?: {
   q?: string;
   category?: string;
@@ -469,23 +480,6 @@ export async function getOrder(
   const qs = params.toString();
   const data = await apiRequest<OrderResponse>(
     `/orders/${encodeURIComponent(orderId)}${qs ? `?${qs}` : ""}`,
-  );
-  return data.order;
-}
-
-export async function completeStubPayment(
-  orderId: string,
-  access: { accessToken?: string; email?: string },
-): Promise<OrderDetailDto> {
-  const data = await apiRequest<OrderResponse>(
-    `/orders/${encodeURIComponent(orderId)}/payments/stub-complete`,
-    {
-      method: "POST",
-      body: {
-        accessToken: access.accessToken,
-        email: access.email,
-      },
-    },
   );
   return data.order;
 }
@@ -652,35 +646,68 @@ export async function listOrganizerEventAttendees(
   return data.attendees;
 }
 
-export async function listEventGallery(token: string, eventId: string) {
-  const data = await apiRequest<EventGalleryResponse>(
-    `/organizer/events/${eventId}/gallery`,
-    { token },
-  );
-  return data.images;
+async function uploadEventImage<T>(
+  token: string,
+  path: string,
+  file: File,
+): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: form,
+  });
+
+  if (res.status === 401) {
+    const next = await getRefreshedAccessToken();
+    if (next) {
+      return uploadEventImage<T>(next, path, file);
+    }
+  }
+
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      data = { error: text };
+    }
+  }
+
+  if (!res.ok) {
+    const message =
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof (data as { error: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : `Upload failed (${res.status})`;
+    throw new ApiError(message, res.status, data);
+  }
+
+  return data as T;
 }
 
-export async function addEventGalleryImage(
+export async function uploadEventMainImage(
   token: string,
   eventId: string,
-  body: AddGalleryImageRequest,
-) {
-  const data = await apiRequest<EventGalleryResponse>(
-    `/organizer/events/${eventId}/gallery`,
-    { method: "POST", token, body },
+  file: File,
+): Promise<EventDto> {
+  const data = await uploadEventImage<OrganizerEventResponse>(
+    token,
+    `/organizer/events/${encodeURIComponent(eventId)}/main-image`,
+    file,
   );
-  return data.images;
-}
-
-export async function removeEventGalleryImage(
-  token: string,
-  eventId: string,
-  imageId: string,
-) {
-  await apiRequest<null>(
-    `/organizer/events/${eventId}/gallery/${imageId}`,
-    { method: "DELETE", token },
-  );
+  return data.event;
 }
 
 export async function getAdminStats(token: string) {
@@ -742,12 +769,4 @@ export async function listAdminOrders(
     { token },
   );
   return data.orders;
-}
-
-export async function lookupTicket(body: TicketLookupRequest) {
-  const data = await apiRequest<TicketLookupResponse>("/tickets/lookup", {
-    method: "POST",
-    body,
-  });
-  return data.ticket;
 }

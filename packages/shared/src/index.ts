@@ -1,4 +1,6 @@
-/** Shared domain types for EventTicketing (aligned with Prisma schema). */
+/** Shared domain types for EventMe (aligned with Prisma schema). */
+
+export * from "./schemas";
 
 export type UserRole = "PLATFORM_ADMIN" | "ORGANIZER" | "CHECK_IN_STAFF";
 
@@ -80,18 +82,6 @@ export interface PaymentDto {
   paidAt: string | null;
 }
 
-export interface CreateOrderItemRequest {
-  ticketTypeId: string;
-  quantity: number;
-}
-
-export interface CreateOrderRequest {
-  purchaserName: string;
-  purchaserEmail: string;
-  purchaserPhone: string;
-  items: CreateOrderItemRequest[];
-}
-
 export interface OrderItemDto {
   id: string;
   ticketTypeId: string;
@@ -125,7 +115,7 @@ export interface OrderDetailDto {
   subtotalAmount: string;
   totalAmount: string;
   reservedUntil: string | null;
-  /** Required for guest GET / stub payment; store client-side after create. */
+  /** Required for guest order confirmation access; store client-side after create. */
   accessToken: string;
   items: OrderItemDto[];
   payment: PaymentDto | null;
@@ -147,8 +137,7 @@ export interface ExpireReservationsResponse {
 
 /** Public payment UI config from GET /payments/config */
 export interface PaymentConfigResponse {
-  provider: "paystack" | "stub" | "none";
-  stubAllowed: boolean;
+  provider: "paystack" | "none";
   /** Paystack public key when provider is paystack (may be null if unset). */
   publicKey: string | null;
 }
@@ -248,73 +237,6 @@ export interface EventDto {
   updatedAt: string;
 }
 
-/** Nested venue write payload (create or upsert on event). */
-export interface VenueInputDto {
-  name: string;
-  address: string;
-  city?: string | null;
-  area?: string | null;
-  country?: string | null;
-  mapUrl?: string | null;
-}
-
-export interface CreateEventRequest {
-  name: string;
-  category?: string | null;
-  description?: string | null;
-  mainImageUrl?: string | null;
-  startsAt: string;
-  endsAt: string;
-  dressCode?: string | null;
-  ageRestriction?: string | null;
-  rules?: string | null;
-  notices?: string | null;
-  contactDetails?: string | null;
-  socialLinks?: Record<string, string> | null;
-  venue?: VenueInputDto | null;
-}
-
-export interface UpdateEventRequest {
-  name?: string;
-  category?: string | null;
-  description?: string | null;
-  mainImageUrl?: string | null;
-  startsAt?: string;
-  endsAt?: string;
-  dressCode?: string | null;
-  ageRestriction?: string | null;
-  rules?: string | null;
-  notices?: string | null;
-  contactDetails?: string | null;
-  socialLinks?: Record<string, string> | null;
-  /** Set to null to detach venue; omit to leave unchanged. */
-  venue?: VenueInputDto | null;
-}
-
-export interface CreateTicketTypeRequest {
-  name: string;
-  description?: string | null;
-  price: number | string;
-  currency?: string;
-  quantityTotal: number;
-  salesStartsAt?: string | null;
-  salesEndsAt?: string | null;
-  isActive?: boolean;
-  sortOrder?: number;
-}
-
-export interface UpdateTicketTypeRequest {
-  name?: string;
-  description?: string | null;
-  price?: number | string;
-  currency?: string;
-  quantityTotal?: number;
-  salesStartsAt?: string | null;
-  salesEndsAt?: string | null;
-  isActive?: boolean;
-  sortOrder?: number;
-}
-
 export interface OrganizerEventListResponse {
   events: EventDto[];
 }
@@ -346,10 +268,6 @@ export interface AdminEventListResponse {
 
 export interface AdminEventResponse {
   event: AdminEventDto;
-}
-
-export interface RejectEventRequest {
-  reason?: string;
 }
 
 /**
@@ -441,6 +359,23 @@ export const CHECK_IN_ALLOWED_EVENT_STATUSES = [
 export type CheckInAllowedEventStatus =
   (typeof CHECK_IN_ALLOWED_EVENT_STATUSES)[number];
 
+/**
+ * Statuses in which an organizer may permanently delete an event (and all its
+ * orders, tickets, payments and check-ins). Events that are published, on sale
+ * or live must be cancelled first.
+ */
+export const EVENT_DELETABLE_STATUSES = [
+  "DRAFT",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "CANCELLED",
+  "COMPLETED",
+] as const satisfies readonly EventStatus[];
+
+export function isEventDeletable(status: EventStatus): boolean {
+  return (EVENT_DELETABLE_STATUSES as readonly EventStatus[]).includes(status);
+}
+
 export type CheckInErrorCode =
   | "TICKET_NOT_FOUND"
   | "WRONG_EVENT"
@@ -489,12 +424,6 @@ export interface CheckInFailureDto {
 }
 
 export type CheckInResponse = CheckInSuccessDto | CheckInFailureDto;
-
-export interface PerformCheckInRequest {
-  /** QR token (primary) or human-readable ticket number (backup). */
-  code: string;
-  deviceLabel?: string;
-}
 
 export interface CheckInStatsDto {
   eventId: string;
@@ -556,20 +485,6 @@ export interface OrganizerStaffResponse {
   staff: OrganizerStaffDto;
 }
 
-export interface CreateOrganizerStaffRequest {
-  email: string;
-  password: string;
-  fullName: string;
-  /** Optional: assign to this event immediately. */
-  eventId?: string;
-}
-
-export interface UpdateOrganizerStaffRequest {
-  isActive?: boolean;
-  fullName?: string;
-  password?: string;
-}
-
 export interface EventStaffAssignmentDto {
   staffId: string;
   email: string;
@@ -582,17 +497,8 @@ export interface EventStaffListResponse {
   staff: EventStaffAssignmentDto[];
 }
 
-export interface AssignEventStaffRequest {
-  staffId: string;
-}
-
 export interface EventGalleryResponse {
   images: EventGalleryImageDto[];
-}
-
-export interface AddGalleryImageRequest {
-  url: string;
-  sortOrder?: number;
 }
 
 export interface OrganizerDashboardStatsDto {
@@ -694,28 +600,6 @@ export interface AdminPlatformStatsResponse {
   stats: AdminPlatformStatsDto;
 }
 
-export interface TicketLookupRequest {
-  email: string;
-  ticketNumber: string;
-}
-
-export interface TicketLookupResultDto {
-  ticketNumber: string;
-  status: TicketStatus;
-  ticketTypeName: string;
-  eventName: string;
-  eventSlug: string;
-  startsAt: string;
-  venueName: string | null;
-  qrToken: string;
-  orderId: string;
-  accessToken: string;
-}
-
-export interface TicketLookupResponse {
-  ticket: TicketLookupResultDto;
-}
-
 export interface PublicEventsQuery {
   q?: string;
   category?: string;
@@ -724,4 +608,4 @@ export interface PublicEventsQuery {
   dateTo?: string;
 }
 
-export const PACKAGE_NAME = "@event-ticketing/shared" as const;
+export const PACKAGE_NAME = "@event-me/shared" as const;

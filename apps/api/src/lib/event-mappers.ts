@@ -2,7 +2,7 @@ import type {
   EventDto,
   TicketTypeDto,
   VenueDto,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import type { Event, TicketType, Venue, Prisma } from "../../prisma/generated";
 
 type EventWithRelations = Event & {

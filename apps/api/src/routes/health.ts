@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { PACKAGE_NAME } from "@event-ticketing/shared";
+import { PACKAGE_NAME } from "@event-me/shared";
 import { prisma } from "../db";
 
 export const healthRouter = Router();
@@ -16,7 +16,7 @@ healthRouter.get("/health", async (_req, res) => {
 
   res.json({
     ok: true,
-    service: "@event-ticketing/api",
+    service: "@event-me/api",
     shared: PACKAGE_NAME,
     database,
   });

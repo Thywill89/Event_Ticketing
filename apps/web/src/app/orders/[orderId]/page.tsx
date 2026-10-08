@@ -6,7 +6,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type {
   OrderDetailDto,
   PaymentConfigResponse,
-} from "@event-ticketing/shared";
+} from "@event-me/shared";
 import { PublicShell } from "@/components/site-header";
 import { TicketQrImage } from "@/components/ticket-qr-image";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   ApiError,
-  completeStubPayment,
   getOrder,
   getPaymentConfig,
   initializePayment,
@@ -117,22 +116,6 @@ function OrderConfirmationInner() {
     load,
   ]);
 
-  async function onStubPay() {
-    if (!orderId) return;
-    setPaying(true);
-    setError(null);
-    try {
-      const data = await completeStubPayment(orderId, { accessToken, email });
-      setOrder(data);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Stub payment failed",
-      );
-    } finally {
-      setPaying(false);
-    }
-  }
-
   async function onPaystackPay() {
     if (!orderId) return;
     setPaying(true);
@@ -148,17 +131,6 @@ function OrderConfirmationInner() {
       setPaying(false);
     }
   }
-
-  const stubAllowed =
-    paymentConfig?.stubAllowed === true ||
-    (paymentConfig?.provider === "stub" &&
-      order?.payment?.provider === "stub");
-
-  const canStubPay =
-    order?.status === "RESERVED" &&
-    order.payment?.status === "PENDING" &&
-    stubAllowed &&
-    (order.payment.provider === "stub" || paymentConfig?.stubAllowed);
 
   const canPaystack =
     order?.status === "RESERVED" &&
@@ -270,25 +242,6 @@ function OrderConfirmationInner() {
             </section>
           ) : null}
 
-          {canStubPay ? (
-            <section className="space-y-3 rounded-xl bg-muted/40 p-4 ring-1 ring-foreground/10">
-              <h2 className="font-heading text-base font-semibold">
-                Test payment (local stub)
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Stub payments are for local testing without Paystack keys. This
-                calls the API to verify payment on the backend, then issues tickets.
-              </p>
-              <Button
-                variant={canPaystack ? "outline" : "default"}
-                onClick={() => void onStubPay()}
-                disabled={paying || verifying}
-              >
-                {paying ? "Completing…" : "Complete test payment"}
-              </Button>
-            </section>
-          ) : null}
-
           {order.tickets.length > 0 ? (
             <section className="space-y-3">
               <Separator />
@@ -313,8 +266,9 @@ function OrderConfirmationInner() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         Status: {ticket.status}
                       </p>
-                      <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">
-                        QR token: {ticket.qrToken}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Show this QR code at the entrance. Don&apos;t share it — anyone with
+                        it can use your ticket.
                       </p>
                     </div>
                   </li>

@@ -1,13 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import type { EventDto, EventGalleryImageDto, EventStatus, TicketTypeDto, UpdateEventRequest } from "@event-ticketing/shared";
-import { CHECK_IN_ALLOWED_EVENT_STATUSES } from "@event-ticketing/shared";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import type {
+  CreateTicketTypeRequest,
+  EventDto,
+  EventStatus,
+  TicketTypeDto,
+  UpdateEventRequest,
+} from "@event-me/shared";
+import { CHECK_IN_ALLOWED_EVENT_STATUSES, isEventDeletable } from "@event-me/shared";
+import { DeleteEventDialog } from "@/components/delete-event-dialog";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EventStatusBadge } from "@/components/event-status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,44 +41,61 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   ApiError,
-  addEventGalleryImage,
   cancelEvent,
   closeEventSales,
   completeEvent,
   createTicketType,
   getOrganizerEvent,
   goLiveEvent,
-  listEventGallery,
   openEventSales,
   pauseEventSales,
   postponeEvent,
   publishEvent,
-  removeEventGalleryImage,
   resumeEventSales,
   submitEventForReview,
   updateOrganizerEvent,
   updateTicketType,
+  uploadEventMainImage,
   withdrawEventReview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/datetime";
+import { toDatetimeLocalValue } from "@/lib/datetime";
 import { formatEventStatus } from "@/lib/event-status";
+import {
+  editEventFormSchema,
+  emptyVenueForm,
+  ticketTypeFormSchema,
+} from "@/lib/form-schemas";
+
+const STATUS_SUCCESS_MESSAGES: Partial<Record<EventStatus, string>> = {
+  DRAFT: "Event Withdrawn to Draft Successfully",
+  PENDING_REVIEW: "Event Submitted for Review Successfully",
+  PUBLISHED: "Event Published Successfully",
+  SALES_OPEN: "Ticket Sales Opened Successfully",
+  SALES_PAUSED: "Ticket Sales Paused Successfully",
+  SALES_CLOSED: "Ticket Sales Closed Successfully",
+  LIVE: "Event Is Now Live",
+  COMPLETED: "Event Completed Successfully",
+  POSTPONED: "Event Postponed Successfully",
+  CANCELLED: "Event Cancelled Successfully",
+};
 
 function canOpenCheckIn(status: EventStatus): boolean {
   return (CHECK_IN_ALLOWED_EVENT_STATUSES as readonly string[]).includes(status);
 }
 
-type TicketFormState = {
-  name: string;
-  description: string;
-  price: string;
-  quantityTotal: string;
-  salesStartsAt: string;
-  salesEndsAt: string;
-  isActive: boolean;
+type EventFormValues = z.input<typeof editEventFormSchema>;
+type TicketFormValues = z.input<typeof ticketTypeFormSchema>;
+
+const emptyEventForm: EventFormValues = {
+  name: "",
+  description: "",
+  startsAt: "",
+  endsAt: "",
+  venue: emptyVenueForm,
 };
 
-const emptyTicketForm = (): TicketFormState => ({
+const emptyTicketForm = (): TicketFormValues => ({
   name: "",
   description: "",
   price: "0",
@@ -87,53 +115,45 @@ export default function EditEventPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [mainImageUrl, setMainImageUrl] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [dressCode, setDressCode] = useState("");
-  const [ageRestriction, setAgeRestriction] = useState("");
-  const [rules, setRules] = useState("");
-  const [notices, setNotices] = useState("");
-  const [contactDetails, setContactDetails] = useState("");
-  const [venueName, setVenueName] = useState("");
-  const [venueAddress, setVenueAddress] = useState("");
-  const [venueCity, setVenueCity] = useState("");
-  const [venueArea, setVenueArea] = useState("");
-  const [gallery, setGallery] = useState<EventGalleryImageDto[]>([]);
-  const [galleryUrl, setGalleryUrl] = useState("");
-  const [galleryBusy, setGalleryBusy] = useState(false);
+  const [mainImageBusy, setMainImageBusy] = useState(false);
 
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketTypeDto | null>(null);
-  const [ticketForm, setTicketForm] = useState<TicketFormState>(emptyTicketForm);
-  const [ticketError, setTicketError] = useState<string | null>(null);
-  const [ticketSaving, setTicketSaving] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const router = useRouter();
 
-  const applyEvent = useCallback((data: EventDto) => {
-    setEvent(data);
-    setName(data.name);
-    setCategory(data.category ?? "");
-    setDescription(data.description ?? "");
-    setMainImageUrl(data.mainImageUrl ?? "");
-    setStartsAt(toDatetimeLocalValue(data.startsAt));
-    setEndsAt(toDatetimeLocalValue(data.endsAt));
-    setDressCode(data.dressCode ?? "");
-    setAgeRestriction(data.ageRestriction ?? "");
-    setRules(data.rules ?? "");
-    setNotices(data.notices ?? "");
-    setContactDetails(data.contactDetails ?? "");
-    setVenueName(data.venue?.name ?? "");
-    setVenueAddress(data.venue?.address ?? "");
-    setVenueCity(data.venue?.city ?? "");
-    setVenueArea(data.venue?.area ?? "");
-  }, []);
+  const eventForm = useForm<EventFormValues, unknown, UpdateEventRequest>({
+    resolver: zodResolver(editEventFormSchema),
+    defaultValues: emptyEventForm,
+  });
+  const eventErrors = eventForm.formState.errors;
+  const resetEventForm = eventForm.reset;
+
+  const ticketForm = useForm<TicketFormValues, unknown, CreateTicketTypeRequest>({
+    resolver: zodResolver(ticketTypeFormSchema),
+    defaultValues: emptyTicketForm(),
+  });
+  const ticketErrors = ticketForm.formState.errors;
+
+  const applyEvent = useCallback(
+    (data: EventDto) => {
+      setEvent(data);
+      resetEventForm({
+        name: data.name,
+        description: data.description ?? "",
+        startsAt: toDatetimeLocalValue(data.startsAt),
+        endsAt: toDatetimeLocalValue(data.endsAt),
+        venue: {
+          name: data.venue?.name ?? "",
+          address: data.venue?.address ?? "",
+          city: data.venue?.city ?? "",
+        },
+      });
+    },
+    [resetEventForm],
+  );
 
   useEffect(() => {
     if (!token || !eventId) return;
@@ -145,8 +165,6 @@ export default function EditEventPage() {
       try {
         const data = await getOrganizerEvent(token!, eventId);
         if (!cancelled) applyEvent(data);
-        const images = await listEventGallery(token!, eventId);
-        if (!cancelled) setGallery(images);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof ApiError ? err.message : "Failed to load event");
@@ -162,59 +180,28 @@ export default function EditEventPage() {
     };
   }, [token, eventId, applyEvent]);
 
-  async function onSaveEvent(e: FormEvent) {
-    e.preventDefault();
+  async function onSaveEvent(body: UpdateEventRequest) {
     if (!token || !eventId) return;
     setSaveError(null);
     setSaveOk(null);
-    setSaving(true);
-
-    const body: UpdateEventRequest = {
-      name: name.trim(),
-      category: category.trim() || null,
-      description: description.trim() || null,
-      mainImageUrl: mainImageUrl.trim() || null,
-      startsAt: fromDatetimeLocalValue(startsAt),
-      endsAt: fromDatetimeLocalValue(endsAt),
-      dressCode: dressCode.trim() || null,
-      ageRestriction: ageRestriction.trim() || null,
-      rules: rules.trim() || null,
-      notices: notices.trim() || null,
-      contactDetails: contactDetails.trim() || null,
-    };
-
-    if (venueName.trim() && venueAddress.trim()) {
-      body.venue = {
-        name: venueName.trim(),
-        address: venueAddress.trim(),
-        city: venueCity.trim() || null,
-        area: venueArea.trim() || null,
-      };
-    } else if (!venueName.trim() && !venueAddress.trim()) {
-      body.venue = null;
-    }
-
     try {
       const updated = await updateOrganizerEvent(token, eventId, body);
       applyEvent(updated);
       setSaveOk("Event saved.");
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Failed to save event");
-    } finally {
-      setSaving(false);
     }
   }
 
   function openCreateTicket() {
     setEditingTicket(null);
-    setTicketForm(emptyTicketForm());
-    setTicketError(null);
+    ticketForm.reset(emptyTicketForm());
     setTicketDialogOpen(true);
   }
 
   function openEditTicket(tt: TicketTypeDto) {
     setEditingTicket(tt);
-    setTicketForm({
+    ticketForm.reset({
       name: tt.name,
       description: tt.description ?? "",
       price: tt.price,
@@ -223,30 +210,11 @@ export default function EditEventPage() {
       salesEndsAt: tt.salesEndsAt ? toDatetimeLocalValue(tt.salesEndsAt) : "",
       isActive: tt.isActive,
     });
-    setTicketError(null);
     setTicketDialogOpen(true);
   }
 
-  async function onSaveTicket(e: FormEvent) {
-    e.preventDefault();
+  async function onSaveTicket(payload: CreateTicketTypeRequest) {
     if (!token || !eventId) return;
-    setTicketError(null);
-    setTicketSaving(true);
-
-    const payload = {
-      name: ticketForm.name.trim(),
-      description: ticketForm.description.trim() || null,
-      price: ticketForm.price,
-      quantityTotal: Number(ticketForm.quantityTotal),
-      salesStartsAt: ticketForm.salesStartsAt
-        ? fromDatetimeLocalValue(ticketForm.salesStartsAt)
-        : null,
-      salesEndsAt: ticketForm.salesEndsAt
-        ? fromDatetimeLocalValue(ticketForm.salesEndsAt)
-        : null,
-      isActive: ticketForm.isActive,
-    };
-
     try {
       if (editingTicket) {
         await updateTicketType(token, eventId, editingTicket.id, payload);
@@ -257,9 +225,9 @@ export default function EditEventPage() {
       applyEvent(refreshed);
       setTicketDialogOpen(false);
     } catch (err) {
-      setTicketError(err instanceof ApiError ? err.message : "Failed to save ticket type");
-    } finally {
-      setTicketSaving(false);
+      ticketForm.setError("root", {
+        message: err instanceof ApiError ? err.message : "Failed to save ticket type",
+      });
     }
   }
 
@@ -270,10 +238,16 @@ export default function EditEventPage() {
     setStatusError(null);
     setSaveOk(null);
     setStatusBusy(true);
+    const previousStatus = event?.status;
     try {
       const updated = await action(token, eventId);
       applyEvent(updated);
-      setSaveOk(`Status updated to ${formatEventStatus(updated.status)}.`);
+      setSaveOk(
+        previousStatus === "SALES_PAUSED" && updated.status === "SALES_OPEN"
+          ? "Ticket Sales Resumed Successfully"
+          : (STATUS_SUCCESS_MESSAGES[updated.status] ??
+              `Status updated to ${formatEventStatus(updated.status)}.`),
+      );
     } catch (err) {
       setStatusError(err instanceof ApiError ? err.message : "Status update failed");
     } finally {
@@ -477,7 +451,7 @@ export default function EditEventPage() {
       title={event.name}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{formatEventStatus(event.status)}</Badge>
+          <EventStatusBadge status={event.status} />
           <Button
             variant="outline"
             size="sm"
@@ -504,19 +478,21 @@ export default function EditEventPage() {
               Door check-in
             </Button>
           ) : null}
-          {event.status !== "DRAFT" &&
-          event.status !== "PENDING_REVIEW" &&
-          event.status !== "APPROVED" ? (
-            <Button variant="outline" render={<Link href={`/events/${event.slug}`} />}>
-              View public page
+          {isEventDeletable(event.status) ? (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              Delete
             </Button>
           ) : null}
-          <Button variant="outline" render={<Link href="/organizer/events" />}>
-            Back
-          </Button>
         </div>
       }
     >
+      <DeleteEventDialog
+        token={token}
+        event={event}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => router.push("/organizer/events")}
+      />
       {statusError ? (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{statusError}</AlertDescription>
@@ -524,28 +500,17 @@ export default function EditEventPage() {
       ) : null}
 
       {workflowActions || exceptionActions ? (
-        <section className="mb-6 flex flex-wrap items-center gap-3 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
-          <div className="mr-auto">
-            <h2 className="font-heading text-sm font-medium">Publishing workflow</h2>
-            <p className="text-xs text-muted-foreground">
-              Draft → review → approve → publish → open sales. Cancel / postpone notify purchasers.
-            </p>
-          </div>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           {workflowActions}
           {exceptionActions}
-        </section>
+        </div>
       ) : null}
 
-      {readOnly ? (
-        <Alert className="mb-4">
-          <AlertDescription>
-            This event is {formatEventStatus(event.status)}. Content edits are limited to draft
-            events — withdraw or wait for rejection to edit again.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <form onSubmit={onSaveEvent} className="grid max-w-2xl gap-6">
+      <form
+        noValidate
+        onSubmit={eventForm.handleSubmit(onSaveEvent)}
+        className="grid max-w-2xl gap-6"
+      >
         {saveError ? (
           <Alert variant="destructive">
             <AlertDescription>{saveError}</AlertDescription>
@@ -558,26 +523,17 @@ export default function EditEventPage() {
         ) : null}
 
         <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
-          <h2 className="font-heading text-sm font-medium">Basic information</h2>
+          <h2 className="font-heading text-sm font-medium">Event</h2>
           <p className="text-xs text-muted-foreground">Slug: {event.slug}</p>
           <div className="grid gap-2">
             <Label htmlFor="name">Event name</Label>
             <Input
               id="name"
-              required
               disabled={readOnly}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              aria-invalid={eventErrors.name ? true : undefined}
+              {...eventForm.register("name")}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="category">Category</Label>
-            <Input
-              id="category"
-              disabled={readOnly}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            />
+            <FieldError message={eventErrors.name?.message} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description</Label>
@@ -585,132 +541,84 @@ export default function EditEventPage() {
               id="description"
               rows={4}
               disabled={readOnly}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              aria-invalid={eventErrors.description ? true : undefined}
+              {...eventForm.register("description")}
             />
+            <FieldError message={eventErrors.description?.message} />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="mainImageUrl">Main image URL</Label>
-            <Input
-              id="mainImageUrl"
-              type="url"
-              disabled={readOnly}
-              placeholder="https://…"
-              value={mainImageUrl}
-              onChange={(e) => setMainImageUrl(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Paste a public HTTPS image URL (Supabase Storage / CDN). Binary upload comes later.
-            </p>
-          </div>
-        </section>
-
-        <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
-          <h2 className="font-heading text-sm font-medium">Gallery</h2>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              type="url"
-              placeholder="https://image-url…"
-              value={galleryUrl}
-              onChange={(e) => setGalleryUrl(e.target.value)}
-              className="max-w-md"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={galleryBusy || !galleryUrl.trim()}
-              onClick={() => {
-                if (!token || !eventId) return;
-                setGalleryBusy(true);
-                void addEventGalleryImage(token, eventId, { url: galleryUrl.trim() })
-                  .then(async () => {
-                    setGalleryUrl("");
-                    setGallery(await listEventGallery(token, eventId));
-                  })
-                  .catch((err) => {
-                    setSaveError(
-                      err instanceof ApiError ? err.message : "Failed to add image",
-                    );
-                  })
-                  .finally(() => setGalleryBusy(false));
-              }}
-            >
-              Add image
-            </Button>
-          </div>
-          {gallery.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No gallery images yet.</p>
-          ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {gallery.map((img) => (
-                <li
-                  key={img.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-                >
-                  <a
-                    href={img.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-primary underline-offset-2 hover:underline"
-                  >
-                    {img.url}
-                  </a>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={galleryBusy}
-                    onClick={() => {
-                      if (!token || !eventId) return;
-                      setGalleryBusy(true);
-                      void removeEventGalleryImage(token, eventId, img.id)
-                        .then(async () => {
-                          setGallery(await listEventGallery(token, eventId));
-                        })
-                        .catch((err) => {
-                          setSaveError(
-                            err instanceof ApiError
-                              ? err.message
-                              : "Failed to remove image",
-                          );
-                        })
-                        .finally(() => setGalleryBusy(false));
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
-          <h2 className="font-heading text-sm font-medium">Date & time</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="startsAt">Starts</Label>
               <Input
                 id="startsAt"
                 type="datetime-local"
-                required
                 disabled={readOnly}
-                value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
+                aria-invalid={eventErrors.startsAt ? true : undefined}
+                {...eventForm.register("startsAt")}
               />
+              <FieldError message={eventErrors.startsAt?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="endsAt">Ends</Label>
               <Input
                 id="endsAt"
                 type="datetime-local"
-                required
                 disabled={readOnly}
-                value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
+                aria-invalid={eventErrors.endsAt ? true : undefined}
+                {...eventForm.register("endsAt")}
               />
+              <FieldError message={eventErrors.endsAt?.message} />
             </div>
           </div>
+        </section>
+
+        <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
+          <h2 className="font-heading text-sm font-medium">Cover photo</h2>
+          {event.mainImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={event.mainImageUrl}
+              alt=""
+              className="h-40 w-full max-w-md rounded-lg object-cover ring-1 ring-foreground/10"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No cover photo yet.</p>
+          )}
+          {!readOnly ? (
+            <div className="grid gap-2">
+              <Label htmlFor="mainImageFile">Upload cover photo</Label>
+              <Input
+                id="mainImageFile"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={mainImageBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file || !token || !eventId) return;
+                  setMainImageBusy(true);
+                  setSaveError(null);
+                  void uploadEventMainImage(token, eventId, file)
+                    .then((updated) => {
+                      applyEvent(updated);
+                      setSaveOk("Cover photo updated.");
+                    })
+                    .catch((err) => {
+                      setSaveError(
+                        err instanceof ApiError
+                          ? err.message
+                          : "Failed to upload cover photo",
+                      );
+                    })
+                    .finally(() => setMainImageBusy(false));
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                JPEG, PNG, WebP, or GIF — up to 5 MB.
+                {mainImageBusy ? " Uploading…" : ""}
+              </p>
+            </div>
+          ) : null}
         </section>
 
         <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
@@ -720,97 +628,37 @@ export default function EditEventPage() {
             <Input
               id="venueName"
               disabled={readOnly}
-              value={venueName}
-              onChange={(e) => setVenueName(e.target.value)}
+              aria-invalid={eventErrors.venue?.name ? true : undefined}
+              {...eventForm.register("venue.name")}
             />
+            <FieldError message={eventErrors.venue?.name?.message} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="venueAddress">Address</Label>
             <Input
               id="venueAddress"
               disabled={readOnly}
-              value={venueAddress}
-              onChange={(e) => setVenueAddress(e.target.value)}
+              aria-invalid={eventErrors.venue?.address ? true : undefined}
+              {...eventForm.register("venue.address")}
             />
+            <FieldError message={eventErrors.venue?.address?.message} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="venueCity">City</Label>
-              <Input
-                id="venueCity"
-                disabled={readOnly}
-                value={venueCity}
-                onChange={(e) => setVenueCity(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="venueArea">Area</Label>
-              <Input
-                id="venueArea"
-                disabled={readOnly}
-                value={venueArea}
-                onChange={(e) => setVenueArea(e.target.value)}
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10">
-          <h2 className="font-heading text-sm font-medium">Event information</h2>
           <div className="grid gap-2">
-            <Label htmlFor="dressCode">Dress code</Label>
+            <Label htmlFor="venueCity">City</Label>
             <Input
-              id="dressCode"
+              id="venueCity"
               disabled={readOnly}
-              value={dressCode}
-              onChange={(e) => setDressCode(e.target.value)}
+              aria-invalid={eventErrors.venue?.city ? true : undefined}
+              {...eventForm.register("venue.city")}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="ageRestriction">Age restriction</Label>
-            <Input
-              id="ageRestriction"
-              disabled={readOnly}
-              value={ageRestriction}
-              onChange={(e) => setAgeRestriction(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="rules">Rules</Label>
-            <Textarea
-              id="rules"
-              rows={3}
-              disabled={readOnly}
-              value={rules}
-              onChange={(e) => setRules(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="notices">Notices</Label>
-            <Textarea
-              id="notices"
-              rows={3}
-              disabled={readOnly}
-              value={notices}
-              onChange={(e) => setNotices(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contactDetails">Contact details</Label>
-            <Textarea
-              id="contactDetails"
-              rows={2}
-              disabled={readOnly}
-              value={contactDetails}
-              onChange={(e) => setContactDetails(e.target.value)}
-            />
+            <FieldError message={eventErrors.venue?.city?.message} />
           </div>
         </section>
 
         {!readOnly ? (
           <div>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save event"}
+            <Button type="submit" disabled={eventForm.formState.isSubmitting}>
+              {eventForm.formState.isSubmitting ? "Saving…" : "Save event"}
             </Button>
           </div>
         ) : null}
@@ -881,42 +729,45 @@ export default function EditEventPage() {
               Configure price, inventory, and optional sales window.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSaveTicket} className="grid gap-3">
-            {ticketError ? (
+          <form
+            noValidate
+            onSubmit={ticketForm.handleSubmit(onSaveTicket)}
+            className="grid gap-3"
+          >
+            {ticketErrors.root?.message ? (
               <Alert variant="destructive">
-                <AlertDescription>{ticketError}</AlertDescription>
+                <AlertDescription>{ticketErrors.root.message}</AlertDescription>
               </Alert>
             ) : null}
             <div className="grid gap-2">
               <Label htmlFor="tt-name">Name</Label>
               <Input
                 id="tt-name"
-                required
-                value={ticketForm.name}
-                onChange={(e) => setTicketForm((s) => ({ ...s, name: e.target.value }))}
+                aria-invalid={ticketErrors.name ? true : undefined}
+                {...ticketForm.register("name")}
               />
+              <FieldError message={ticketErrors.name?.message} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="tt-desc">Description</Label>
               <Textarea
                 id="tt-desc"
                 rows={2}
-                value={ticketForm.description}
-                onChange={(e) =>
-                  setTicketForm((s) => ({ ...s, description: e.target.value }))
-                }
+                aria-invalid={ticketErrors.description ? true : undefined}
+                {...ticketForm.register("description")}
               />
+              <FieldError message={ticketErrors.description?.message} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="tt-price">Price (GHS)</Label>
                 <Input
                   id="tt-price"
-                  required
                   inputMode="decimal"
-                  value={ticketForm.price}
-                  onChange={(e) => setTicketForm((s) => ({ ...s, price: e.target.value }))}
+                  aria-invalid={ticketErrors.price ? true : undefined}
+                  {...ticketForm.register("price")}
                 />
+                <FieldError message={ticketErrors.price?.message} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="tt-qty">Quantity</Label>
@@ -924,12 +775,10 @@ export default function EditEventPage() {
                   id="tt-qty"
                   type="number"
                   min={0}
-                  required
-                  value={ticketForm.quantityTotal}
-                  onChange={(e) =>
-                    setTicketForm((s) => ({ ...s, quantityTotal: e.target.value }))
-                  }
+                  aria-invalid={ticketErrors.quantityTotal ? true : undefined}
+                  {...ticketForm.register("quantityTotal")}
                 />
+                <FieldError message={ticketErrors.quantityTotal?.message} />
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -938,32 +787,24 @@ export default function EditEventPage() {
                 <Input
                   id="tt-sales-start"
                   type="datetime-local"
-                  value={ticketForm.salesStartsAt}
-                  onChange={(e) =>
-                    setTicketForm((s) => ({ ...s, salesStartsAt: e.target.value }))
-                  }
+                  aria-invalid={ticketErrors.salesStartsAt ? true : undefined}
+                  {...ticketForm.register("salesStartsAt")}
                 />
+                <FieldError message={ticketErrors.salesStartsAt?.message} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="tt-sales-end">Sales end</Label>
                 <Input
                   id="tt-sales-end"
                   type="datetime-local"
-                  value={ticketForm.salesEndsAt}
-                  onChange={(e) =>
-                    setTicketForm((s) => ({ ...s, salesEndsAt: e.target.value }))
-                  }
+                  aria-invalid={ticketErrors.salesEndsAt ? true : undefined}
+                  {...ticketForm.register("salesEndsAt")}
                 />
+                <FieldError message={ticketErrors.salesEndsAt?.message} />
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={ticketForm.isActive}
-                onChange={(e) =>
-                  setTicketForm((s) => ({ ...s, isActive: e.target.checked }))
-                }
-              />
+              <input type="checkbox" {...ticketForm.register("isActive")} />
               Active for sale (when sales open)
             </label>
             <DialogFooter>
@@ -974,8 +815,8 @@ export default function EditEventPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={ticketSaving}>
-                {ticketSaving ? "Saving…" : "Save ticket type"}
+              <Button type="submit" disabled={ticketForm.formState.isSubmitting}>
+                {ticketForm.formState.isSubmitting ? "Saving…" : "Save ticket type"}
               </Button>
             </DialogFooter>
           </form>

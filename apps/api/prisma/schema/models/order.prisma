@@ -15,7 +15,7 @@ model Order {
   /// Inventory hold expiry (plan §7.4 temporary reservation)
   reservedUntil DateTime?
 
-  /// Opaque guest access token for confirmation / stub payment (not a User JWT)
+  /// Opaque guest access token for confirmation URL (not a User JWT)
   accessToken String @unique
 
   createdAt DateTime @default(now())

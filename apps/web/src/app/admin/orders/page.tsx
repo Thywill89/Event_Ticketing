@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AdminOrderSummaryDto, OrderStatus } from "@event-ticketing/shared";
+import type { AdminOrderSummaryDto, OrderStatus } from "@event-me/shared";
 import { AdminShell } from "@/components/admin-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

@@ -1,11 +1,18 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import type { OrganizerStaffDto } from "@event-ticketing/shared";
+import { useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import {
+  createOrganizerStaffSchema,
+  type OrganizerStaffDto,
+} from "@event-me/shared";
 import { OrganizerShell } from "@/components/organizer-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,6 +31,9 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
+const staffFormSchema = createOrganizerStaffSchema.omit({ eventId: true });
+type StaffFormValues = z.infer<typeof staffFormSchema>;
+
 export default function OrganizerStaffPage() {
   const { token } = useAuth();
   const [staff, setStaff] = useState<OrganizerStaffDto[]>([]);
@@ -32,9 +42,15 @@ export default function OrganizerStaffPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<StaffFormValues>({
+    resolver: zodResolver(staffFormSchema),
+    defaultValues: { fullName: "", email: "", password: "" },
+  });
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -53,23 +69,17 @@ export default function OrganizerStaffPage() {
     void load();
   }, [load]);
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
+  async function onCreate(values: StaffFormValues) {
     if (!token) return;
-    setBusy(true);
     setError(null);
     setOk(null);
     try {
-      await createOrganizerStaff(token, { email, password, fullName });
-      setEmail("");
-      setPassword("");
-      setFullName("");
+      await createOrganizerStaff(token, values);
+      reset();
       setOk("Staff account created. Assign them to an event from the event page.");
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create staff");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -104,8 +114,9 @@ export default function OrganizerStaffPage() {
       ) : null}
 
       <form
-        onSubmit={onCreate}
-        className="mb-8 grid max-w-xl gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10"
+        noValidate
+        onSubmit={handleSubmit(onCreate)}
+        className="mx-auto mb-8 grid w-full max-w-xl gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10"
       >
         <div>
           <h2 className="font-heading text-sm font-medium">Invite door staff</h2>
@@ -117,41 +128,41 @@ export default function OrganizerStaffPage() {
           <Label htmlFor="fullName">Full name</Label>
           <Input
             id="fullName"
-            required
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            aria-invalid={errors.fullName ? true : undefined}
+            {...register("fullName")}
           />
+          <FieldError message={errors.fullName?.message} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={errors.email ? true : undefined}
+            {...register("email")}
           />
+          <FieldError message={errors.email?.message} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="password">Temporary password</Label>
           <Input
             id="password"
             type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            aria-invalid={errors.password ? true : undefined}
+            {...register("password")}
           />
+          <FieldError message={errors.password?.message} />
         </div>
-        <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Create staff"}
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Saving…" : "Create staff"}
         </Button>
       </form>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-center text-sm text-muted-foreground">Loading…</p>
       ) : staff.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No staff yet.</p>
+        <p className="text-center text-sm text-muted-foreground">No staff yet.</p>
       ) : (
         <div className="overflow-hidden rounded-xl bg-background ring-1 ring-foreground/10">
           <Table>

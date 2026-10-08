@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import type {
-  AdminEventListResponse,
-  AdminEventResponse,
-  EventStatus,
-} from "@event-ticketing/shared";
+import {
+  rejectEventSchema,
+  type AdminEventListResponse,
+  type AdminEventResponse,
+  type EventStatus,
+} from "@event-me/shared";
 import { prisma } from "../db";
 import { writeAuditLog } from "../lib/audit";
 import { toEventDto } from "../lib/event-mappers";
@@ -41,10 +42,6 @@ const listQuerySchema = z.object({
     ])
     .optional()
     .default("PENDING_REVIEW"),
-});
-
-const rejectSchema = z.object({
-  reason: z.string().trim().min(1).max(2000).optional(),
 });
 
 export const adminEventsRouter = Router();
@@ -171,7 +168,7 @@ adminEventsRouter.post("/admin/events/:eventId/approve", async (req, res) => {
  * Optional body: { reason?: string } (stored on audit log).
  */
 adminEventsRouter.post("/admin/events/:eventId/reject", async (req, res) => {
-  const parsed = rejectSchema.safeParse(req.body ?? {});
+  const parsed = rejectEventSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
@@ -342,4 +339,65 @@ adminEventsRouter.post("/admin/events/:eventId/cancel", async (req, res) => {
     },
   };
   res.json(body);
+});
+
+/**
+ * DELETE /admin/events/:eventId — permanently remove a DRAFT event.
+ */
+adminEventsRouter.delete("/admin/events/:eventId", async (req, res) => {
+  const eventId = String(req.params.eventId);
+  const existing = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      slug: true,
+      organizerId: true,
+      _count: { select: { orders: true, tickets: true } },
+    },
+  });
+  if (!existing) {
+    res.status(404).json({ error: "Event not found" });
+    return;
+  }
+
+  if (existing.status !== "DRAFT") {
+    res.status(409).json({
+      error: "Only draft events can be deleted",
+      status: existing.status,
+      code: "EVENT_NOT_DRAFT",
+    });
+    return;
+  }
+
+  if (existing._count.orders > 0 || existing._count.tickets > 0) {
+    res.status(409).json({
+      error: "This draft has related orders or tickets and cannot be deleted",
+      code: "EVENT_HAS_RELATED_RECORDS",
+    });
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await writeAuditLog(
+      {
+        actorId: req.auth!.sub,
+        action: "event.delete_draft",
+        entityType: "Event",
+        entityId: existing.id,
+        metadata: {
+          name: existing.name,
+          slug: existing.slug,
+          organizerId: existing.organizerId,
+          status: existing.status,
+        },
+      },
+      tx,
+    );
+
+    await tx.event.delete({ where: { id: existing.id } });
+  });
+
+  res.status(204).send();
 });

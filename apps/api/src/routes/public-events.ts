@@ -2,8 +2,8 @@ import { Router } from "express";
 import type {
   PublicEventListResponse,
   PublicEventResponse,
-} from "@event-ticketing/shared";
-import { PUBLIC_EVENT_STATUSES } from "@event-ticketing/shared";
+} from "@event-me/shared";
+import { PUBLIC_EVENT_STATUSES } from "@event-me/shared";
 import type { Prisma } from "../../prisma/generated";
 import { prisma } from "../db";
 import {

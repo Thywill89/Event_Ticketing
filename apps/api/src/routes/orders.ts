@@ -1,21 +1,19 @@
 import { Router } from "express";
 import type { Request } from "express";
-import { z } from "zod";
-import type {
-  CreateOrderResponse,
-  ExpireReservationsResponse,
-  InitializePaymentResponse,
-  OrderResponse,
-  PaymentConfigResponse,
-} from "@event-ticketing/shared";
+import {
+  createOrderSchema,
+  type CreateOrderResponse,
+  type ExpireReservationsResponse,
+  type InitializePaymentResponse,
+  type OrderResponse,
+  type PaymentConfigResponse,
+} from "@event-me/shared";
 import {
   env,
   isPaystackConfigured,
-  isStubPaymentsAllowed,
 } from "../config/env";
 import {
   OrderError,
-  completeStubPayment,
   createOrder,
   expireDueReservations,
   getOrderDetailInternal,
@@ -30,21 +28,6 @@ import { PaystackError, verifyPaystackSignature } from "../lib/paystack";
 export const ordersRouter = Router();
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
-
-const createOrderSchema = z.object({
-  purchaserName: z.string().trim().min(1).max(120),
-  purchaserEmail: z.string().email().max(255),
-  purchaserPhone: z.string().trim().min(5).max(40),
-  items: z
-    .array(
-      z.object({
-        ticketTypeId: z.string().min(1),
-        quantity: z.number().int().min(1).max(20),
-      }),
-    )
-    .min(1)
-    .max(20),
-});
 
 function readAccess(req: {
   query: Record<string, unknown>;
@@ -99,7 +82,7 @@ function enqueueOrderConfirmation(order: {
   totalAmount: string;
   currency: string;
   accessToken: string;
-  tickets: Array<{ ticketNumber: string; ticketTypeName: string }>;
+  tickets: Array<{ ticketNumber: string; ticketTypeName: string; qrToken: string }>;
 }) {
   if (order.status !== "PAID" || order.tickets.length === 0) return;
   void notifyOrderConfirmation({
@@ -114,6 +97,7 @@ function enqueueOrderConfirmation(order: {
     tickets: order.tickets.map((t) => ({
       ticketNumber: t.ticketNumber,
       ticketTypeName: t.ticketTypeName,
+      qrToken: t.qrToken,
     })),
   }).catch((err) => console.error("order confirmation email failed", err));
 }
@@ -125,8 +109,7 @@ function enqueueOrderConfirmation(order: {
 ordersRouter.get("/payments/config", (_req, res) => {
   const paystack = isPaystackConfigured();
   const body: PaymentConfigResponse = {
-    provider: paystack ? "paystack" : isStubPaymentsAllowed() ? "stub" : "none",
-    stubAllowed: isStubPaymentsAllowed(),
+    provider: paystack ? "paystack" : "none",
     publicKey: paystack ? env.paystackPublicKey || null : null,
   };
   res.json(body);
@@ -274,30 +257,6 @@ ordersRouter.post("/orders/:orderId/payments/verify", async (req, res) => {
     if (handleOrderError(res, err)) return;
     console.error("verify payment failed", err);
     res.status(500).json({ error: "Failed to verify payment" });
-  }
-});
-
-/**
- * POST /orders/:orderId/payments/stub-complete
- * Local/dev backend verification that marks payment succeeded and issues tickets.
- * Gated: ALLOW_STUB_PAYMENTS=true, or non-production without Paystack keys.
- */
-ordersRouter.post("/orders/:orderId/payments/stub-complete", async (req, res) => {
-  const orderId = req.params.orderId;
-  if (!orderId?.trim()) {
-    res.status(400).json({ error: "orderId is required" });
-    return;
-  }
-
-  try {
-    const order = await completeStubPayment(orderId, readAccess(req));
-    enqueueOrderConfirmation(order);
-    const body: OrderResponse = { order };
-    res.json(body);
-  } catch (err) {
-    if (handleOrderError(res, err)) return;
-    console.error("stub payment failed", err);
-    res.status(500).json({ error: "Failed to complete stub payment" });
   }
 });
 

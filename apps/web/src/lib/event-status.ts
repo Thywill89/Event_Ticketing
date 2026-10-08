@@ -1,4 +1,4 @@
-import type { EventStatus } from "@event-ticketing/shared";
+import type { EventStatus } from "@event-me/shared";
 
 const LABELS: Record<EventStatus, string> = {
   DRAFT: "Draft",

@@ -1,5 +1,5 @@
 /**
- * Local smoke: issue ticket via stub → check-in → reject second scan.
+ * Local smoke: seed a paid ticket via Prisma → check-in → reject second scan.
  * Run: npx tsx scripts/smoke-check-in.ts
  */
 import "dotenv/config";
@@ -7,6 +7,7 @@ import { prisma } from "../src/db";
 import { hashPassword } from "../src/lib/password";
 import { signAccessToken } from "../src/lib/jwt";
 import {
+  generateOrderAccessToken,
   generateQrToken,
   generateTicketNumber,
 } from "../src/lib/ticket-codes";
@@ -56,6 +57,7 @@ async function main() {
           price: 25,
           currency: "GHS",
           quantityTotal: 50,
+          quantitySold: 1,
           isActive: true,
         },
       },
@@ -64,46 +66,59 @@ async function main() {
   });
 
   const tt = event.ticketTypes[0]!;
+  const accessToken = generateOrderAccessToken();
+  const ticketNumber = generateTicketNumber();
+  const qrToken = generateQrToken();
 
-  const orderRes = await fetch(`${base}/events/${event.id}/orders`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const order = await prisma.order.create({
+    data: {
+      eventId: event.id,
+      status: "PAID",
       purchaserName: "Guest",
       purchaserEmail: `guest-${stamp}@example.com`,
       purchaserPhone: "+233200000001",
-      items: [{ ticketTypeId: tt.id, quantity: 1 }],
-    }),
-  });
-  const orderJson = (await orderRes.json()) as {
-    order?: { id: string; accessToken: string; items: Array<{ id: string }> };
-    error?: string;
-  };
-  if (!orderRes.ok || !orderJson.order) {
-    throw new Error(`create order failed: ${JSON.stringify(orderJson)}`);
-  }
-  const order = orderJson.order;
-
-  const payRes = await fetch(
-    `${base}/orders/${order.id}/payments/stub-complete`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken: order.accessToken }),
+      currency: "GHS",
+      subtotalAmount: 25,
+      totalAmount: 25,
+      accessToken,
+      items: {
+        create: {
+          ticketTypeId: tt.id,
+          quantity: 1,
+          unitPrice: 25,
+          lineTotal: 25,
+        },
+      },
+      payment: {
+        create: {
+          status: "SUCCEEDED",
+          provider: "paystack",
+          providerRef: `smoke_${stamp}`,
+          amount: 25,
+          currency: "GHS",
+          paidAt: new Date(),
+        },
+      },
     },
-  );
-  const payJson = (await payRes.json()) as {
-    order?: {
-      tickets: Array<{ qrToken: string; ticketNumber: string; status: string }>;
-      items: Array<{ id: string }>;
-    };
-    error?: string;
-  };
-  if (!payRes.ok || !payJson.order?.tickets?.[0]) {
-    throw new Error(`stub pay failed: ${JSON.stringify(payJson)}`);
-  }
+    include: { items: true },
+  });
 
-  const ticket = payJson.order.tickets[0];
+  const orderItemId = order.items[0]!.id;
+
+  const ticket = await prisma.ticket.create({
+    data: {
+      eventId: event.id,
+      orderId: order.id,
+      orderItemId,
+      ticketTypeId: tt.id,
+      status: "ISSUED",
+      ticketNumber,
+      qrToken,
+      attendeeName: "Guest",
+      issuedAt: new Date(),
+    },
+  });
+
   console.log("issued", ticket.ticketNumber, ticket.status);
 
   const headers = {
@@ -116,7 +131,11 @@ async function main() {
     headers,
     body: JSON.stringify({ code: ticket.qrToken, deviceLabel: "smoke" }),
   });
-  const ci1Body = (await ci1.json()) as { ok?: boolean; code?: string; message?: string };
+  const ci1Body = (await ci1.json()) as {
+    ok?: boolean;
+    code?: string;
+    message?: string;
+  };
   console.log("first", ci1.status, JSON.stringify(ci1Body));
   if (!ci1.ok || !ci1Body.ok) {
     throw new Error("first check-in failed");
@@ -137,7 +156,7 @@ async function main() {
     data: {
       eventId: event.id,
       orderId: order.id,
-      orderItemId: payJson.order.items[0]!.id,
+      orderItemId,
       ticketTypeId: tt.id,
       status: "ISSUED",
       ticketNumber: generateTicketNumber(),

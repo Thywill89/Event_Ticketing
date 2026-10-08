@@ -24,6 +24,9 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Uploaded media (local API storage)
+apps/api/uploads/
+
 # OS
 .DS_Store
 Thumbs.db

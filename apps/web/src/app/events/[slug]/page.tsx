@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { PublicEventDto, PublicTicketTypeDto } from "@event-ticketing/shared";
+import type { PublicEventDto, PublicTicketTypeDto } from "@event-me/shared";
 import { PublicShell } from "@/components/site-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ApiError, getPublicEvent } from "@/lib/api";
 import { formatEventWhen } from "@/lib/datetime";
-import { formatEventStatus } from "@/lib/event-status";
+import { EventStatusBadge } from "@/components/event-status-badge";
 
 function formatMoney(price: string, currency: string): string {
   const amount = Number(price);
@@ -36,7 +36,7 @@ function salesCta(event: PublicEventDto): {
   switch (event.status) {
     case "SALES_OPEN":
       return {
-        label: "Continue to checkout",
+        label: "Buy tickets",
         disabled: false,
         href: `/events/${event.slug}/checkout`,
       };
@@ -135,21 +135,9 @@ export default function PublicEventDetailPage() {
                 className="aspect-[21/9] w-full object-cover"
               />
             ) : null}
-            {event.galleryImages && event.galleryImages.length > 0 ? (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {event.galleryImages.map((img) => (
-                  <img
-                    key={img.id}
-                    src={img.url}
-                    alt=""
-                    className="h-24 w-36 shrink-0 object-cover"
-                  />
-                ))}
-              </div>
-            ) : null}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{formatEventStatus(event.status)}</Badge>
+                <EventStatusBadge status={event.status} />
                 {event.category ? (
                   <Badge variant="outline">{event.category}</Badge>
                 ) : null}
@@ -281,7 +269,7 @@ export default function PublicEventDetailPage() {
             <div className="space-y-1">
               <h2 className="font-heading text-lg font-semibold">Tickets</h2>
               <p className="text-sm text-muted-foreground">
-                Prices and availability. Select quantities on checkout.
+                Pick a ticket to buy. You can change quantities at checkout.
               </p>
             </div>
             {!event.ticketTypes || event.ticketTypes.length === 0 ? (
@@ -304,9 +292,29 @@ export default function PublicEventDetailPage() {
                         {ticketAvailabilityLabel(tt)}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold">
-                      {formatMoney(tt.price, tt.currency)}
-                    </p>
+                    <div className="flex shrink-0 items-center gap-4">
+                      <p className="text-sm font-semibold">
+                        {formatMoney(tt.price, tt.currency)}
+                      </p>
+                      {event.status === "SALES_OPEN" ? (
+                        tt.isActive && tt.quantityAvailable > 0 ? (
+                          <Button
+                            size="sm"
+                            render={
+                              <Link
+                                href={`/events/${event.slug}/checkout?ticket=${encodeURIComponent(tt.id)}`}
+                              />
+                            }
+                          >
+                            Buy ticket
+                          </Button>
+                        ) : (
+                          <Button size="sm" disabled>
+                            {tt.isActive ? "Sold out" : "Unavailable"}
+                          </Button>
+                        )
+                      ) : null}
+                    </div>
                   </li>
                 ))}
               </ul>

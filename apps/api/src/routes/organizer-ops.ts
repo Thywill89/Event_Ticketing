@@ -1,19 +1,48 @@
 import { Router } from "express";
-import { z } from "zod";
-import type {
-  EventGalleryResponse,
-  OrganizerAttendeeListResponse,
-  OrganizerDashboardResponse,
-  OrganizerOrderListResponse,
-} from "@event-ticketing/shared";
+import type { Request, Response, NextFunction } from "express";
+import {
+  addGalleryImageSchema,
+  type EventGalleryResponse,
+  type OrganizerAttendeeListResponse,
+  type OrganizerDashboardResponse,
+  type OrganizerEventResponse,
+  type OrganizerOrderListResponse,
+} from "@event-me/shared";
 import { Prisma } from "../../prisma/generated";
 import { prisma } from "../db";
 import { writeAuditLog } from "../lib/audit";
+import { toEventDto } from "../lib/event-mappers";
+import { imageUpload, uploadEventImage } from "../lib/uploads";
 import { requireOrganizer } from "../middleware/auth";
 
 export const organizerOpsRouter = Router();
 
 organizerOpsRouter.use("/organizer", requireOrganizer);
+
+function handleMulterError(err: unknown, res: Response): boolean {
+  if (!err) return false;
+  const message =
+    err instanceof Error ? err.message : "Failed to upload image";
+  const isMulter =
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    typeof (err as { code: unknown }).code === "string";
+  const code = isMulter ? (err as { code: string }).code : "";
+  if (code === "LIMIT_FILE_SIZE") {
+    res.status(400).json({ error: "Image must be 5 MB or smaller" });
+    return true;
+  }
+  res.status(400).json({ error: message });
+  return true;
+}
+
+function runImageUpload(req: Request, res: Response, next: NextFunction) {
+  imageUpload.single("file")(req, res, (err) => {
+    if (handleMulterError(err, res)) return;
+    next();
+  });
+}
 
 /**
  * GET /organizer/dashboard — KPI snapshot (plan §10.1).
@@ -177,11 +206,6 @@ organizerOpsRouter.get(
   },
 );
 
-const addGallerySchema = z.object({
-  url: z.string().trim().url().max(2000),
-  sortOrder: z.number().int().min(0).max(1000).optional(),
-});
-
 /**
  * GET /organizer/events/:eventId/gallery
  */
@@ -215,14 +239,142 @@ organizerOpsRouter.get("/organizer/events/:eventId/gallery", async (req, res) =>
 });
 
 /**
- * POST /organizer/events/:eventId/gallery — add image URL (cloud upload later).
+ * POST /organizer/events/:eventId/main-image
+ * Multipart field `file` — sets the event cover image.
+ */
+organizerOpsRouter.post(
+  "/organizer/events/:eventId/main-image",
+  runImageUpload,
+  async (req, res) => {
+    const organizerId = req.auth!.organizerId!;
+    const eventId = String(req.params.eventId);
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "Choose an image to upload" });
+      return;
+    }
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, organizerId },
+      select: { id: true },
+    });
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+
+    let url: string;
+    try {
+      url = await uploadEventImage({ eventId, file });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to upload image";
+      res.status(500).json({ error: message });
+      return;
+    }
+
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: { mainImageUrl: url },
+      include: { venue: true, ticketTypes: { orderBy: { sortOrder: "asc" } } },
+    });
+
+    await writeAuditLog({
+      actorId: req.auth!.sub,
+      action: "event.main_image_upload",
+      entityType: "Event",
+      entityId: eventId,
+      metadata: { url },
+    });
+
+    const body: OrganizerEventResponse = { event: toEventDto(updated) };
+    res.json(body);
+  },
+);
+
+/**
+ * POST /organizer/events/:eventId/gallery/upload
+ * Multipart field `file` — adds a gallery image.
+ */
+organizerOpsRouter.post(
+  "/organizer/events/:eventId/gallery/upload",
+  runImageUpload,
+  async (req, res) => {
+    const organizerId = req.auth!.organizerId!;
+    const eventId = String(req.params.eventId);
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "Choose an image to upload" });
+      return;
+    }
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, organizerId },
+      select: { id: true },
+    });
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+
+    const count = await prisma.eventGalleryImage.count({ where: { eventId } });
+    if (count >= 12) {
+      res.status(400).json({ error: "Gallery limit is 12 images" });
+      return;
+    }
+
+    let url: string;
+    try {
+      url = await uploadEventImage({ eventId, file });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to upload image";
+      res.status(500).json({ error: message });
+      return;
+    }
+
+    const image = await prisma.eventGalleryImage.create({
+      data: {
+        eventId,
+        url,
+        sortOrder: count,
+      },
+    });
+
+    await writeAuditLog({
+      actorId: req.auth!.sub,
+      action: "event.gallery_upload",
+      entityType: "EventGalleryImage",
+      entityId: image.id,
+      metadata: { eventId },
+    });
+
+    const images = await prisma.eventGalleryImage.findMany({
+      where: { eventId },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+
+    const body: EventGalleryResponse = {
+      images: images.map((img) => ({
+        id: img.id,
+        url: img.url,
+        sortOrder: img.sortOrder,
+        createdAt: img.createdAt.toISOString(),
+      })),
+    };
+    res.status(201).json(body);
+  },
+);
+
+/**
+ * POST /organizer/events/:eventId/gallery — add image by URL (legacy).
  */
 organizerOpsRouter.post(
   "/organizer/events/:eventId/gallery",
   async (req, res) => {
     const organizerId = req.auth!.organizerId!;
     const eventId = String(req.params.eventId);
-    const parsed = addGallerySchema.safeParse(req.body);
+    const parsed = addGalleryImageSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
       return;

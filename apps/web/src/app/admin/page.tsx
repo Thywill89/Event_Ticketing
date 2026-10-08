@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { AdminPlatformStatsDto } from "@event-ticketing/shared";
+import type { AdminPlatformStatsDto } from "@event-me/shared";
 import {
   ArrowRight,
   CalendarClock,

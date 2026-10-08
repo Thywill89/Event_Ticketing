@@ -1,13 +1,14 @@
 import { Router } from "express";
-import { z } from "zod";
-import type {
-  AuthUserDto,
-  LoginResponse,
-  OrganizerRegisterResponse,
-  OrganizerStatus,
-  RefreshTokenResponse,
-  UserRole,
-} from "@event-ticketing/shared";
+import {
+  loginSchema,
+  registerOrganizerSchema,
+  type AuthUserDto,
+  type LoginResponse,
+  type OrganizerRegisterResponse,
+  type OrganizerStatus,
+  type RefreshTokenResponse,
+  type UserRole,
+} from "@event-me/shared";
 import { env } from "../config/env";
 import { prisma } from "../db";
 import { signAccessToken } from "../lib/jwt";
@@ -25,19 +26,6 @@ import {
   requireOrganizer,
   requirePlatformAdmin,
 } from "../middleware/auth";
-
-const registerSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(8).max(128),
-  fullName: z.string().trim().min(1).max(120),
-  displayName: z.string().trim().min(1).max(120),
-  phone: z.string().trim().min(5).max(40).optional(),
-});
-
-const loginSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(1).max(128),
-});
 
 function toAuthUserDto(input: {
   id: string;
@@ -114,7 +102,7 @@ export const authRouter = Router();
  * Creates User (ORGANIZER) + Organizer and returns access JWT + refresh cookie.
  */
 authRouter.post("/auth/organizer/register", async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
+  const parsed = registerOrganizerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;

@@ -1,5 +1,5 @@
 {
-  "name": "@event-ticketing/shared",
+  "name": "@event-me/shared",
   "version": "0.0.0",
   "private": true,
   "main": "./dist/index.js",
@@ -17,9 +17,12 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"No lint configured for @event-ticketing/shared\""
+    "lint": "echo \"No lint configured for @event-me/shared\""
   },
   "devDependencies": {
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }

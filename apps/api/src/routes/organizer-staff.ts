@@ -1,10 +1,12 @@
 import { Router } from "express";
-import { z } from "zod";
-import type {
-  EventStaffListResponse,
-  OrganizerStaffListResponse,
-  OrganizerStaffResponse,
-} from "@event-ticketing/shared";
+import {
+  assignEventStaffSchema,
+  createOrganizerStaffSchema,
+  updateOrganizerStaffSchema,
+  type EventStaffListResponse,
+  type OrganizerStaffListResponse,
+  type OrganizerStaffResponse,
+} from "@event-me/shared";
 import { prisma } from "../db";
 import { writeAuditLog } from "../lib/audit";
 import { hashPassword } from "../lib/password";
@@ -13,23 +15,6 @@ import { requireOrganizer } from "../middleware/auth";
 export const organizerStaffRouter = Router();
 
 organizerStaffRouter.use("/organizer", requireOrganizer);
-
-const createStaffSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(8).max(128),
-  fullName: z.string().trim().min(1).max(120),
-  eventId: z.string().min(1).optional(),
-});
-
-const updateStaffSchema = z.object({
-  isActive: z.boolean().optional(),
-  fullName: z.string().trim().min(1).max(120).optional(),
-  password: z.string().min(8).max(128).optional(),
-});
-
-const assignSchema = z.object({
-  staffId: z.string().min(1),
-});
 
 async function loadStaffDto(staffId: string, organizerId: string) {
   const staff = await prisma.organizerStaff.findFirst({
@@ -84,7 +69,7 @@ organizerStaffRouter.get("/organizer/staff", async (req, res) => {
  */
 organizerStaffRouter.post("/organizer/staff", async (req, res) => {
   const organizerId = req.auth!.organizerId!;
-  const parsed = createStaffSchema.safeParse(req.body);
+  const parsed = createOrganizerStaffSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
@@ -192,7 +177,7 @@ organizerStaffRouter.post("/organizer/staff", async (req, res) => {
 organizerStaffRouter.patch("/organizer/staff/:staffId", async (req, res) => {
   const organizerId = req.auth!.organizerId!;
   const staffId = String(req.params.staffId);
-  const parsed = updateStaffSchema.safeParse(req.body ?? {});
+  const parsed = updateOrganizerStaffSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
@@ -315,7 +300,7 @@ organizerStaffRouter.get("/organizer/events/:eventId/staff", async (req, res) =>
 organizerStaffRouter.post("/organizer/events/:eventId/staff", async (req, res) => {
   const organizerId = req.auth!.organizerId!;
   const eventId = String(req.params.eventId);
-  const parsed = assignSchema.safeParse(req.body);
+  const parsed = assignEventStaffSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;

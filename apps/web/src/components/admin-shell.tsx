@@ -68,7 +68,7 @@ export function AdminShell({
       <div className="border-b border-sidebar-border px-5 py-5">
         <Link href="/admin" className="block">
           <p className="font-heading text-sm font-semibold tracking-tight text-sidebar-foreground">
-            EventTicketing
+            EventMe
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">Platform admin</p>
         </Link>
